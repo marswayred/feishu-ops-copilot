@@ -2,6 +2,7 @@ node_modules/
 .npm-cache/
 .browser-cache/
 dist/
+data/
 .env
 .env.*
 !.env.example

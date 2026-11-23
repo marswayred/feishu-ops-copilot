@@ -7,11 +7,18 @@ import { fileURLToPath } from 'node:url';
 import { FeishuClient, FeishuDirectory } from './feishu.js';
 import { createDemoDirectory, demoContacts, demoDepartments } from './demo.js';
 import { DirectoryError, resolveEmployeeNumbers, resolveSelection } from './directory.js';
+import { createDirectoryCache } from './directory-cache.js';
 
 const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
+const DEFAULT_CACHE_PATH = fileURLToPath(new URL('../data/directory-cache.json', import.meta.url));
 const SESSION_COOKIE = 'feishu_helper_session';
 const LIMITS = Object.freeze({ employeeNumbers: 1000, users: 1000, departments: 100 });
-const defaults = { production: false, mode: 'demo', appOrigin: 'http://localhost:5173', appId: '', appSecret: '', tenantKey: '', allowedOpenIds: [], trustProxy: 0, host: '127.0.0.1', port: 3000, sessionTtlMs: 3_600_000, maxSessions: 5000, maxConcurrentQueries: 4, requestTimeoutMs: 10_000, queryTimeoutMs: 110_000 };
+const defaults = {
+  production: false, mode: 'demo', appOrigin: 'http://localhost:5173', appId: '', appSecret: '', tenantKey: '',
+  allowedOpenIds: [], trustProxy: 0, host: '127.0.0.1', port: 3000, sessionTtlMs: 3_600_000, maxSessions: 5000,
+  maxConcurrentQueries: 4, requestTimeoutMs: 10_000, queryTimeoutMs: 110_000,
+  directoryCacheTtlMs: 7 * 24 * 60 * 60 * 1000, directoryCachePath: DEFAULT_CACHE_PATH,
+};
 
 function validateConfig(input) {
   const config = { ...defaults, ...input };
@@ -22,13 +29,19 @@ function validateConfig(input) {
   if (!['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('APP_ORIGIN 只能包含协议、主机及端口');
   if (config.production && origin.protocol !== 'https:') throw new Error('生产环境 APP_ORIGIN 必须使用 HTTPS');
   config.appOrigin = origin.origin;
-  if (config.mode === 'feishu' && ['appId', 'appSecret', 'tenantKey'].some(key => typeof config[key] !== 'string' || !config[key].trim())) throw new Error('飞书模式必须配置 FEISHU_APP_ID、FEISHU_APP_SECRET 和 FEISHU_TENANT_KEY');
+  if (config.mode === 'feishu' && ['appId', 'appSecret'].some(key => typeof config[key] !== 'string' || !config[key].trim())) throw new Error('飞书模式必须配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET');
+  if (typeof config.tenantKey !== 'string') throw new Error('FEISHU_TENANT_KEY 必须是字符串');
   if (![0, 1].includes(config.trustProxy)) throw new Error('TRUST_PROXY 只能为 0 或 1');
   if (!Array.isArray(config.allowedOpenIds) || config.allowedOpenIds.some(id => typeof id !== 'string' || !/^ou[_-][A-Za-z0-9_-]+$/.test(id))) throw new Error('ALLOWED_OPEN_IDS 必须是逗号分隔的 open_id');
-  for (const key of ['sessionTtlMs', 'maxSessions', 'maxConcurrentQueries', 'requestTimeoutMs', 'queryTimeoutMs', 'port']) {
+  for (const key of ['sessionTtlMs', 'maxSessions', 'maxConcurrentQueries', 'requestTimeoutMs', 'queryTimeoutMs', 'port', 'directoryCacheTtlMs']) {
     if (!Number.isSafeInteger(config[key]) || config[key] < 1) throw new Error(`${key} 必须为正整数`);
   }
+  if (config.directoryCachePath !== null && (typeof config.directoryCachePath !== 'string' || !config.directoryCachePath.trim())) {
+    throw new Error('directoryCachePath 必须为非空路径，或显式设为 null 仅使用内存缓存');
+  }
+  if (typeof config.directoryCachePath === 'string') config.directoryCachePath = config.directoryCachePath.trim();
   if (config.port > 65535 || config.requestTimeoutMs > 60_000 || config.sessionTtlMs > 3_600_000 || config.maxSessions > 5000 || config.maxConcurrentQueries > 16 || config.queryTimeoutMs > 110_000) throw new Error('服务安全限制配置超出允许范围');
+  if (config.directoryCacheTtlMs < 60_000 || config.directoryCacheTtlMs > 30 * 24 * 60 * 60 * 1000) throw new Error('directoryCacheTtlMs 必须在 1 分钟到 30 天之间');
   return config;
 }
 
@@ -37,12 +50,20 @@ export function loadConfig(env = process.env) {
   if (env.TRUST_PROXY !== undefined && !['0', '1'].includes(env.TRUST_PROXY)) throw new Error('TRUST_PROXY 只能为 0 或 1');
   if (production && env.APP_MODE !== 'feishu') throw new Error('生产环境必须显式设置 APP_MODE=feishu');
   if (production && !env.APP_ORIGIN) throw new Error('生产环境必须配置 APP_ORIGIN');
+  const cacheHours = env.DIRECTORY_CACHE_TTL_HOURS === undefined ? undefined : Number(env.DIRECTORY_CACHE_TTL_HOURS);
+  if (cacheHours !== undefined && (!Number.isFinite(cacheHours) || cacheHours <= 0)) throw new Error('DIRECTORY_CACHE_TTL_HOURS 必须为正数');
+  let directoryCachePath = defaults.directoryCachePath;
+  if (env.DIRECTORY_CACHE_PATH !== undefined) {
+    directoryCachePath = env.DIRECTORY_CACHE_PATH.trim() === '' ? null : env.DIRECTORY_CACHE_PATH.trim();
+  }
   return validateConfig({
     production, mode: env.APP_MODE || 'demo', appOrigin: env.APP_ORIGIN || defaults.appOrigin,
     appId: env.FEISHU_APP_ID || '', appSecret: env.FEISHU_APP_SECRET || '', tenantKey: env.FEISHU_TENANT_KEY || '',
     allowedOpenIds: (env.ALLOWED_OPEN_IDS || '').split(',').map(id => id.trim()).filter(Boolean),
     trustProxy: env.TRUST_PROXY === undefined ? 0 : Number(env.TRUST_PROXY),
     host: env.HOST || '127.0.0.1', port: env.PORT === undefined ? 3000 : Number(env.PORT),
+    directoryCacheTtlMs: cacheHours === undefined ? defaults.directoryCacheTtlMs : Math.round(cacheHours * 3_600_000),
+    directoryCachePath,
   });
 }
 
@@ -75,7 +96,25 @@ export function createApp({ config: suppliedConfig = loadConfig(), directory, cl
   const config = validateConfig(suppliedConfig);
   const app = express();
   const apiClient = client || (config.mode === 'feishu' ? new FeishuClient({ appId: config.appId, appSecret: config.appSecret, fetchImpl }) : null);
-  const provider = directory || (config.mode === 'demo' ? createDemoDirectory() : new FeishuDirectory(apiClient));
+  let provider = directory;
+  if (!provider) {
+    if (config.mode === 'demo') provider = createDemoDirectory();
+    else {
+      const directoryCache = createDirectoryCache({
+        filePath: config.directoryCachePath,
+        ttlMs: config.directoryCacheTtlMs,
+        appId: config.appId,
+      });
+      provider = new FeishuDirectory(apiClient, { cache: directoryCache });
+      setImmediate(() => {
+        provider.listAllUsers().then(users => {
+          console.log(`directory_cache_warmed count=${users.length} ttl_hours=${Math.round(config.directoryCacheTtlMs / 3_600_000)}`);
+        }).catch(error => {
+          console.error('directory_cache_warm_failed', error?.code || error?.name || 'Error', error?.message || '');
+        });
+      });
+    }
+  }
   const sessions = new Map();
   const cookieOptions = { httpOnly: true, secure: config.production, sameSite: 'strict', path: '/' };
   let runningQueries = 0;
@@ -87,7 +126,8 @@ export function createApp({ config: suppliedConfig = loadConfig(), directory, cl
   app.use(helmet({
     strictTransportSecurity: config.production ? undefined : false,
     contentSecurityPolicy: { directives: {
-      defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://lf-scm-cn.feishucdn.com'],
+      // 官方 h5-js-sdk 用 new Function("return this") 取全局对象，缺少 unsafe-eval 时 onload 后无 window.h5sdk
+      defaultSrc: ["'self'"], scriptSrc: ["'self'", "'unsafe-eval'", 'https://lf-scm-cn.feishucdn.com'],
       styleSrc: ["'self'"], imgSrc: ["'self'", 'data:'], connectSrc: ["'self'"],
       objectSrc: ["'none'"], frameAncestors: ["'none'"], formAction: ["'self'"],
       upgradeInsecureRequests: config.production ? [] : null,
@@ -188,7 +228,7 @@ export function createApp({ config: suppliedConfig = loadConfig(), directory, cl
         method: 'GET', headers: { Authorization: `Bearer ${token.access_token}` },
       });
       const identity = info.data;
-      if (!identity || identity.tenant_key !== config.tenantKey || typeof identity.open_id !== 'string' || !/^ou[_-][A-Za-z0-9_-]+$/.test(identity.open_id)) throw fail(403, 'TENANT_REJECTED', '当前飞书账号不属于本应用允许的企业。');
+      if (!identity || typeof identity.open_id !== 'string' || !/^ou[_-][A-Za-z0-9_-]+$/.test(identity.open_id)) throw fail(403, 'AUTH_REJECTED', '无法确认当前飞书账号身份，请重新登录。');
       if (config.allowedOpenIds.length && !config.allowedOpenIds.includes(identity.open_id)) throw fail(403, 'USER_REJECTED', '当前账号未被授予本应用的使用权限。');
       return { name: typeof identity.name === 'string' ? identity.name.slice(0, 200) : '飞书用户', openId: identity.open_id };
     });
@@ -262,6 +302,11 @@ export function createApp({ config: suppliedConfig = loadConfig(), directory, cl
     if (error.code === 'ENOENT') return res.status(404).json(errorBody('NOT_FOUND', '页面尚未构建，请先构建应用。'));
     if (error instanceof DirectoryError) return res.status(422).json(errorBody('DIRECTORY_INCOMPLETE', error.message));
     if (error instanceof RangeError) return res.status(422).json(errorBody('DIRECTORY_LIMIT', '通讯录查询超出安全处理上限，请缩小范围后重试。'));
+    if (error?.name === 'FeishuApiError') {
+      console.error('feishu_api_error', { code: error.code, status: error.status, path: error.path, message: error.message });
+      return res.status(502).json(errorBody('FEISHU_API_ERROR', '飞书通讯录接口调用失败，请检查应用权限、用户组权限或稍后重试。'));
+    }
+    console.error('unhandled_query_error', error?.name || 'Error', error?.message || 'unknown');
     return res.status(502).json(errorBody('SERVICE_UNAVAILABLE', '查询暂未完成，请检查通讯录授权范围与字段权限，或稍后重试。'));
   });
   return app;

@@ -24,9 +24,30 @@ function apiUrl(path, query) {
   const url = new URL(path.startsWith('/open-apis/') ? path : `/open-apis${path}`, ORIGIN);
   if (url.origin !== ORIGIN || !url.pathname.startsWith('/open-apis/')) throw new TypeError('无效的飞书 API 路径');
   for (const [key, value] of Object.entries(query || {})) {
-    if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) url.searchParams.append(key, String(item));
+    } else {
+      url.searchParams.set(key, String(value));
+    }
   }
   return url;
+}
+
+async function mapPool(items, concurrency, worker) {
+  const list = [...items];
+  if (!list.length) return [];
+  const limit = Math.min(Math.max(1, concurrency), list.length);
+  const results = new Array(list.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: limit }, async () => {
+    while (next < list.length) {
+      const index = next;
+      next += 1;
+      results[index] = await worker(list[index], index);
+    }
+  }));
+  return results;
 }
 
 function checkTimeout(value) {
@@ -181,17 +202,23 @@ export class FeishuClient {
 }
 
 const ID_TYPES = { user_id_type: 'open_id', department_id_type: 'open_department_id' };
+const SCAN_CONCURRENCY = 8;
+const USER_BATCH_SIZE = 50;
 
 export class FeishuDirectory {
-  constructor(client, { signal } = {}) {
+  constructor(client, { signal, cache = null } = {}) {
     if (typeof client?.request !== 'function') throw new TypeError('client 必须实现 request');
+    if (cache != null && (typeof cache.get !== 'function' || typeof cache.set !== 'function')) {
+      throw new TypeError('cache 必须实现 get/set');
+    }
     this.client = client;
     this.signal = signal;
+    this.cache = cache;
     this.scopeNote = SCOPE_NOTE;
   }
 
   withSignal(signal) {
-    return new FeishuDirectory(this.client, { signal });
+    return new FeishuDirectory(this.client, { signal, cache: this.cache });
   }
 
   async *_pages(path, query = {}) {
@@ -251,9 +278,67 @@ export class FeishuDirectory {
     return user;
   }
 
+  async getUsers(openIds) {
+    const ids = [...new Set((openIds || []).map(id => {
+      if (typeof id !== 'string' || !id.trim()) throw new DirectoryError('通讯录用户 ID 无效，无法保证完整扫描。');
+      return id.trim();
+    }))];
+    const users = [];
+    for (let offset = 0; offset < ids.length; offset += USER_BATCH_SIZE) {
+      this.signal?.throwIfAborted();
+      const chunk = ids.slice(offset, offset + USER_BATCH_SIZE);
+      const result = await this.client.request('/contact/v3/users/batch', {
+        signal: this.signal,
+        query: { ...ID_TYPES, user_ids: chunk },
+      });
+      this.signal?.throwIfAborted();
+      const items = result?.data?.items;
+      if (!Array.isArray(items)) throw new DirectoryError('飞书批量用户响应格式未知，无法保证完整扫描。');
+      const byId = new Map();
+      for (const item of items) byId.set(userId(item), item);
+      for (const id of chunk) {
+        const user = byId.get(id);
+        if (!user) throw new DirectoryError('批量获取用户时缺少返回项，无法保证完整扫描。');
+        users.push(user);
+      }
+    }
+    return users;
+  }
+
+  async listGroupMemberIds(groupId, memberType) {
+    if (typeof groupId !== 'string' || !groupId.trim()) throw new DirectoryError('通讯录用户组 ID 无效，无法保证完整扫描。');
+    if (memberType !== 'user' && memberType !== 'department') throw new TypeError('memberType 必须为 user 或 department');
+    // 官方文档：member_type=department 时 member_id_type 仍用 open_id（表示 open_department_id），
+    // 传入 open_department_id 会返回 99992402 field validation failed。
+    const ids = [];
+    for await (const data of this._pages(`/contact/v3/group/${encodeURIComponent(groupId.trim())}/member/simplelist`, {
+      member_type: memberType,
+      member_id_type: 'open_id',
+    })) {
+      if (data.memberlist !== undefined && !Array.isArray(data.memberlist)) {
+        throw new DirectoryError('飞书用户组成员列表格式未知，无法保证完整扫描。');
+      }
+      for (const member of data.memberlist || []) {
+        const id = member?.member_id;
+        if (typeof id !== 'string' || !id.trim()) throw new DirectoryError('用户组成员缺少有效 ID，无法保证完整扫描。');
+        ids.push(id.trim());
+        assertScanLimit(ids.length);
+      }
+    }
+    return ids;
+  }
+
   async listAllUsers() {
+    this.signal?.throwIfAborted();
+    if (this.cache) {
+      const cached = await this.cache.get();
+      this.signal?.throwIfAborted();
+      if (cached) return cached;
+    }
+
     const directUsers = new Set();
     const roots = new Set();
+    const groups = new Set();
     let scopeCount = 0;
     // Official scopes: root children + direct users for all-staff access; selected
     // departments (without descendants), standalone users and groups otherwise.
@@ -264,24 +349,38 @@ export class FeishuDirectory {
           !['user_ids', 'department_ids', 'group_ids'].every(key => Array.isArray(data[key]))) {
         throw new DirectoryError('通讯录授权范围未知或字段缺失，无法保证完整扫描；请检查通讯录范围及 contact:user.employee_id:readonly 权限。');
       }
-      if (data.group_ids.length) throw new DirectoryError('通讯录授权范围包含用户组 group_ids，当前不支持展开用户组；请改为部门及成员授权后重试，未返回部分结果。');
-      for (const key of ['user_ids', 'department_ids']) {
+      for (const [key, target] of [['user_ids', directUsers], ['department_ids', roots], ['group_ids', groups]]) {
         for (const id of data[key]) {
           if (typeof id !== 'string' || !id.trim()) throw new DirectoryError('通讯录授权范围包含无效 ID，无法保证完整扫描。');
-          (key === 'user_ids' ? directUsers : roots).add(id.trim());
+          target.add(id.trim());
           assertScanLimit(++scopeCount);
         }
       }
     }
+    await mapPool(groups, SCAN_CONCURRENCY, async groupId => {
+      this.signal?.throwIfAborted();
+      const [userIds, departmentIds] = await Promise.all([
+        this.listGroupMemberIds(groupId, 'user'),
+        this.listGroupMemberIds(groupId, 'department'),
+      ]);
+      for (const id of userIds) {
+        directUsers.add(id);
+        assertScanLimit(directUsers.size + roots.size + groups.size);
+      }
+      for (const id of departmentIds) {
+        roots.add(id);
+        assertScanLimit(directUsers.size + roots.size + groups.size);
+      }
+    });
     const departments = new Set(roots);
-    for (const id of roots) {
+    await mapPool(roots, SCAN_CONCURRENCY, async id => {
       this.signal?.throwIfAborted();
       for (const department of await this.listDescendantDepartments(id)) {
         this.signal?.throwIfAborted();
         departments.add(departmentId(department));
         assertScanLimit(departments.size);
       }
-    }
+    });
     const users = new Map();
     let scanned = 0;
     const add = user => {
@@ -290,15 +389,19 @@ export class FeishuDirectory {
       const id = userId(user);
       if (!users.has(id)) users.set(id, user);
     };
-    for (const id of directUsers) {
-      this.signal?.throwIfAborted();
-      add(await this.getUser(id));
-    }
-    for (const id of departments) {
+    for (const user of await this.getUsers([...directUsers])) add(user);
+    await mapPool(departments, SCAN_CONCURRENCY, async id => {
       this.signal?.throwIfAborted();
       for (const user of await this.listDepartmentUsers(id)) add(user);
-    }
+    });
     this.signal?.throwIfAborted();
-    return [...users.values()];
+    const result = [...users.values()];
+    if (this.cache) {
+      try { return await this.cache.set(result); }
+      catch (error) {
+        console.error('directory_cache_set_failed', error.code || error.name);
+      }
+    }
+    return result;
   }
 }

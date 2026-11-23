@@ -86,13 +86,32 @@ export async function chooseFeishuContacts(selectedUsers) {
   const url = window.location.href.split('#')[0];
   const config = await api(`/api/feishu/js-config?url=${encodeURIComponent(url)}`);
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('选择器鉴权超时，请检查飞书安全域名配置。')), 15_000);
+    let settled = false;
+    const timer = setTimeout(() => finish(new Error('选择器鉴权超时，请检查飞书安全域名与 JSAPI 鉴权配置。')), 15_000);
+    function finish(error) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) reject(error); else resolve();
+    }
+    const failMessage = err => {
+      const detail = typeof err === 'string' ? err : (err?.errMsg || err?.errString || err?.message || '');
+      return new Error(detail ? `选择器鉴权失败：${detail}` : '选择器鉴权失败，请检查应用安全域名和 JS SDK 配置。');
+    };
+    // 官方约定：config + error + ready；onSuccess/onFail 为鉴权结果，ready 表示可调 JSAPI
+    window.h5sdk.error(err => finish(failMessage(err)));
     window.h5sdk.config({
-      ...config,
+      appId: config.appId,
+      timestamp: config.timestamp,
+      nonceStr: config.nonceStr,
+      signature: config.signature,
       jsApiList: ['chooseContact'],
-      success: () => { clearTimeout(timer); resolve(); },
-      fail: () => { clearTimeout(timer); reject(new Error('选择器鉴权失败，请检查应用安全域名和 JS SDK 配置。')); },
+      onSuccess: () => {},
+      onFail: err => finish(failMessage(err)),
+      success: () => {},
+      fail: err => finish(failMessage(err)),
     });
+    window.h5sdk.ready(() => finish());
   });
   return new Promise((resolve, reject) => {
     tt.chooseContact({

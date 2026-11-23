@@ -5,7 +5,7 @@ import { once } from 'node:events';
 import { createApp, loadConfig } from '../server/app.js';
 
 const ORIGIN = 'http://localhost:5173';
-const feishuConfig = (extra = {}) => ({ mode: 'feishu', appOrigin: ORIGIN, appId: 'cli_test', appSecret: 'SECRET_NOT_FOR_BROWSER', tenantKey: 'tenant_expected', ...extra });
+const feishuConfig = (extra = {}) => ({ mode: 'feishu', appOrigin: ORIGIN, appId: 'cli_test', appSecret: 'SECRET_NOT_FOR_BROWSER', tenantKey: 'tenant_expected', directoryCachePath: null, ...extra });
 const user = { open_id: 'ou_allowed', name: '测试成员', tenant_key: 'tenant_expected' };
 const mockUser = { open_id: 'ou_allowed', name: '测试成员', employee_no: '0012', enterprise_email: 'member@example.com' };
 const json = body => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -45,8 +45,9 @@ test('configuration fails closed in production and validates origin and proxy', 
   assert.throws(() => loadConfig({ NODE_ENV: 'production' }), /APP_MODE/);
   assert.throws(() => loadConfig({ NODE_ENV: 'production', APP_MODE: 'demo' }), /APP_MODE/);
   assert.throws(() => loadConfig({ APP_MODE: 'feishu' }), /FEISHU/);
-  const env = { NODE_ENV: 'production', APP_MODE: 'feishu', APP_ORIGIN: 'https://app.example.com', FEISHU_APP_ID: 'cli_test', FEISHU_APP_SECRET: 'secret', FEISHU_TENANT_KEY: 'tenant' };
+  const env = { NODE_ENV: 'production', APP_MODE: 'feishu', APP_ORIGIN: 'https://app.example.com', FEISHU_APP_ID: 'cli_test', FEISHU_APP_SECRET: 'secret' };
   assert.equal(loadConfig(env).production, true);
+  assert.equal(loadConfig(env).tenantKey, '');
   assert.throws(() => loadConfig({ ...env, APP_ORIGIN: 'http://app.example.com' }), /HTTPS/);
   assert.throws(() => loadConfig({ ...env, APP_ORIGIN: 'https://user:pass@app.example.com' }), /APP_ORIGIN/);
   assert.throws(() => loadConfig({ ...env, APP_ORIGIN: 'https://app.example.com/path' }), /APP_ORIGIN/);
@@ -147,17 +148,19 @@ test('OAuth uses v3 then user_info, rotates HttpOnly sessions and logout revokes
   assert.equal((await (await request('/api/bootstrap', { cookie: nextCookie })).json()).authenticated, false);
 });
 
-test('tenant and optional user allowlist are enforced before setting a session', async t => {
-  for (const [identity, config, expected] of [
-    [{ ...user, tenant_key: 'tenant_other' }, feishuConfig(), 'TENANT_REJECTED'],
-    [user, feishuConfig({ allowedOpenIds: ['ou_other'] }), 'USER_REJECTED'],
-  ]) {
-    const { request } = await server(t, { config, directory: provider(), fetchImpl: authFetch(identity) });
-    const response = await request('/api/auth/feishu', { method: 'POST', body: { code: 'code' } });
-    assert.equal(response.status, 403);
-    assert.equal(response.headers.get('set-cookie'), null);
-    assert.equal((await response.json()).error.code, expected);
-  }
+test('tenant key is not required and optional user allowlist is enforced before setting a session', async t => {
+  const mismatchedTenant = await server(t, {
+    config: feishuConfig({ tenantKey: '' }),
+    directory: provider(),
+    fetchImpl: authFetch({ ...user, tenant_key: 'tenant_other' }),
+  });
+  assert.equal((await mismatchedTenant.request('/api/auth/feishu', { method: 'POST', body: { code: 'code' } })).status, 200);
+
+  const { request } = await server(t, { config: feishuConfig({ allowedOpenIds: ['ou_other'] }), directory: provider(), fetchImpl: authFetch(user) });
+  const response = await request('/api/auth/feishu', { method: 'POST', body: { code: 'code' } });
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get('set-cookie'), null);
+  assert.equal((await response.json()).error.code, 'USER_REJECTED');
 });
 
 test('production sessions are Secure and Helmet CSP only allows official SDK scripts', async t => {
@@ -166,9 +169,9 @@ test('production sessions are Secure and Helmet CSP only allows official SDK scr
   assert.equal(response.status, 200);
   assert.match(response.headers.get('set-cookie'), /Secure/);
   const csp = response.headers.get('content-security-policy');
-  assert.match(csp, /script-src 'self' https:\/\/lf-scm-cn\.feishucdn\.com/);
+  assert.match(csp, /script-src 'self' 'unsafe-eval' https:\/\/lf-scm-cn\.feishucdn\.com/);
   assert.match(csp, /connect-src 'self'/);
-  assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/);
+  assert.doesNotMatch(csp, /unsafe-inline/);
   assert.equal(response.headers.get('access-control-allow-origin'), null);
   assert.equal(response.headers.get('x-powered-by'), null);
 });

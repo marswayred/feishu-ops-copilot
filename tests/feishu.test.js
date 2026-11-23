@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { FeishuClient, FeishuDirectory, FeishuApiError } from '../server/feishu.js';
 import { DirectoryError } from '../server/directory.js';
+import { createDirectoryCache } from '../server/directory-cache.js';
 
 const json = (payload, status = 200, headers = {}) => new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json', ...headers } });
 const token = () => json({ code: 0, tenant_access_token: 'tenant-token', expire: 7200 });
@@ -180,15 +184,20 @@ test('scopes enumerates standalone users, departments and descendants, deduplica
     }
     if (path.endsWith('/children')) return envelope({ items: [{ open_department_id: 'od-child' }], has_more: false });
     if (path.endsWith('/find_by_department')) return envelope({ items: query.department_id === 'od-root' ? [user('a')] : [user('a'), user('b')], has_more: false });
+    if (path.endsWith('/users/batch')) {
+      const ids = [].concat(query.user_ids || []);
+      return envelope({ items: ids.map(id => user(id)) });
+    }
     return envelope({ user: user(path.split('/').at(-1)) });
   } });
   assert.deepEqual((await directory.listAllUsers()).map(item => item.open_id), ['solo', 'a', 'b']);
-  assert.deepEqual(calls.filter(call => call.path.endsWith('/find_by_department')).map(call => call.query.department_id), ['od-root', 'od-child']);
+  assert.deepEqual(calls.filter(call => call.path.endsWith('/find_by_department')).map(call => call.query.department_id).sort(), ['od-child', 'od-root']);
+  assert.ok(calls.some(call => call.path.endsWith('/users/batch')));
   assert.ok(!calls.some(call => call.query.department_id === '0'));
 });
 
-test('unknown or group-based scopes fail closed before any user result is fetched', async () => {
-  for (const data of [scope({ group_ids: ['group'] }), { has_more: false, department_ids: [] }, scope({ unknown_ids: ['x'] }), scope({ user_ids: [null] })]) {
+test('unknown scopes fail closed before any user result is fetched', async () => {
+  for (const data of [{ has_more: false, department_ids: [] }, scope({ unknown_ids: ['x'] }), scope({ user_ids: [null] })]) {
     let calls = 0;
     const directory = new FeishuDirectory({ request: async path => {
       calls += 1;
@@ -200,16 +209,87 @@ test('unknown or group-based scopes fail closed before any user result is fetche
   }
 });
 
-test('group scopes on later page invalidate entire scan, explicitly empty scope succeeds', async () => {
-  let count = 0;
-  const directory = new FeishuDirectory({ request: async path => {
-    assert.equal(path, '/contact/v3/scopes');
-    count += 1;
-    return envelope(count === 1 ? scope({ user_ids: ['a'], has_more: true, page_token: 'next' }) : scope({ group_ids: ['g'] }));
+test('group scopes expand user and department members then continue scanning', async () => {
+  const calls = [];
+  const directory = new FeishuDirectory({ request: async (path, options) => {
+    calls.push({ path, query: options.query });
+    if (path === '/contact/v3/scopes') {
+      return envelope(scope({ user_ids: ['solo'], group_ids: ['g1'] }));
+    }
+    if (path === '/contact/v3/group/g1/member/simplelist') {
+      assert.equal(options.query.member_id_type, 'open_id');
+      if (options.query.member_type === 'user') {
+        return envelope({ memberlist: [{ member_id: 'ou_from_group', member_type: 'user' }], has_more: false });
+      }
+      return envelope({ memberlist: [{ member_id: 'od-from-group', member_type: 'department' }], has_more: false });
+    }
+    if (path.endsWith('/children')) return envelope({ items: [], has_more: false });
+    if (path.endsWith('/find_by_department')) {
+      assert.equal(options.query.department_id, 'od-from-group');
+      return envelope({ items: [user('dept_user')], has_more: false });
+    }
+    if (path.endsWith('/users/batch')) {
+      return envelope({ items: [].concat(options.query.user_ids || []).map(id => user(id)) });
+    }
+    return envelope({ user: user(path.split('/').at(-1)) });
   } });
-  await assert.rejects(directory.listAllUsers(), /用户组/);
-  const empty = new FeishuDirectory({ request: async () => envelope(scope()) });
-  assert.deepEqual(await empty.listAllUsers(), []);
+  assert.deepEqual((await directory.listAllUsers()).map(item => item.open_id).sort(), ['dept_user', 'ou_from_group', 'solo']);
+  assert.ok(calls.some(call => call.path === '/contact/v3/group/g1/member/simplelist' && call.query.member_type === 'user'));
+  assert.ok(calls.some(call => call.path === '/contact/v3/group/g1/member/simplelist' && call.query.member_type === 'department'));
+});
+
+test('group scopes on later page are expanded; explicitly empty scope succeeds', async () => {
+  let count = 0;
+  const directory = new FeishuDirectory({ request: async (path, options) => {
+    if (path === '/contact/v3/scopes') {
+      count += 1;
+      return envelope(count === 1 ? scope({ user_ids: ['a'], has_more: true, page_token: 'next' }) : scope({ group_ids: ['g'] }));
+    }
+    if (path === '/contact/v3/group/g/member/simplelist') {
+      return envelope({ memberlist: options.query.member_type === 'user' ? [{ member_id: 'a' }] : [], has_more: false });
+    }
+    if (path.endsWith('/users/batch')) {
+      return envelope({ items: [].concat(options.query.user_ids || []).map(id => user(id)) });
+    }
+    return envelope({ user: user(path.split('/').at(-1)) });
+  } });
+  assert.deepEqual((await directory.listAllUsers()).map(item => item.open_id), ['a']);
+  const emptyClient = { request: async () => envelope(scope()) };
+  assert.deepEqual(await new FeishuDirectory(emptyClient).listAllUsers(), []);
+});
+
+test('listAllUsers caches completed scans in memory and on disk', async () => {
+  let scopes = 0;
+  const client = { request: async path => {
+    if (path.endsWith('/scopes')) {
+      scopes += 1;
+      return envelope(scope({ user_ids: ['a'] }));
+    }
+    if (path.endsWith('/users/batch')) return envelope({ items: [user('a')] });
+    throw new Error(`unexpected ${path}`);
+  } };
+  const cache = createDirectoryCache({ filePath: null, ttlMs: 60_000, appId: 'cli_test' });
+  const first = new FeishuDirectory(client, { cache });
+  assert.deepEqual((await first.listAllUsers()).map(item => item.open_id), ['a']);
+  assert.equal(scopes, 1);
+  assert.deepEqual((await first.withSignal(undefined).listAllUsers()).map(item => item.open_id), ['a']);
+  assert.equal(scopes, 1);
+
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'feishu-dir-cache-'));
+  const filePath = path.join(dir, 'cache.json');
+  const diskCache = createDirectoryCache({ filePath, ttlMs: 3_600_000, appId: 'cli_test' });
+  const diskDir = new FeishuDirectory(client, { cache: diskCache });
+  assert.deepEqual((await diskDir.listAllUsers()).map(item => item.open_id), ['a']);
+  assert.equal(scopes, 2);
+  const cold = new FeishuDirectory(client, {
+    cache: createDirectoryCache({ filePath, ttlMs: 3_600_000, appId: 'cli_test' }),
+  });
+  assert.deepEqual((await cold.listAllUsers()).map(item => item.open_id), ['a']);
+  assert.equal(scopes, 2);
+  const raw = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  assert.equal(raw.appId, 'cli_test');
+  assert.equal(raw.users[0].employee_no, 'number-a');
+  await fs.rm(dir, { recursive: true, force: true });
 });
 
 test('repeated or missing pagination tokens fail rather than return partial users', async () => {
@@ -248,7 +328,7 @@ test('scope and pagination integrity errors are safe DirectoryError instances', 
     assert.doesNotMatch(error.message, /private-group-id|secret-page-token/);
     return true;
   };
-  await assert.rejects(new FeishuDirectory({ request: async () => envelope(scope({ group_ids: ['private-group-id'] })) }).listAllUsers(), check);
+  await assert.rejects(new FeishuDirectory({ request: async () => envelope(scope({ unknown_ids: ['private-group-id'] })) }).listAllUsers(), check);
   await assert.rejects(new FeishuDirectory({ request: async () => envelope({ has_more: false }) }).listAllUsers(), check);
   await assert.rejects(new FeishuDirectory({ request: async () => envelope({ items: [], has_more: true, page_token: 'secret-page-token' }) }).listDepartmentUsers('od-one'), check);
 });
@@ -282,7 +362,11 @@ test('whole scan cancellation stops direct users and authorized department expan
       assert.equal(signal, controller.signal);
       calls.push(path);
       if (path.endsWith('/scopes')) return envelope(scope(mode === 'users' ? { user_ids: ['a', 'b'] } : { department_ids: ['od-one', 'od-two'] }));
-      if (mode === 'users') { controller.abort(reason); return envelope({ user: user('a') }); }
+      if (mode === 'users') {
+        controller.abort(reason);
+        if (path.endsWith('/users/batch')) return envelope({ items: [user('a')] });
+        return envelope({ user: user('a') });
+      }
       if (path.endsWith('/children')) {
         if (mode === 'roots') controller.abort(reason);
         return envelope({ items: [], has_more: false });

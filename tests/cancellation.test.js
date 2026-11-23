@@ -63,10 +63,10 @@ test('disconnect aborts scan and does not strand concurrency slot', async t => {
 
 test('safe directory errors expose a useful reason but raw upstream errors stay hidden', async t => {
   let safe = true;
-  const post = await start(t, { directory: { async listAllUsers() { throw safe ? new DirectoryError('授权包含用户组，请改为部门授权。') : new Error('SECRET upstream data'); } } });
+  const post = await start(t, { directory: { async listAllUsers() { throw safe ? new DirectoryError('通讯录授权范围未知或字段缺失。') : new Error('SECRET upstream data'); } } });
   const first = await post('/api/resolve/employee-numbers', { numbers: ['E1001'] });
   assert.equal(first.status, 422);
-  assert.equal((await first.json()).error.message, '授权包含用户组，请改为部门授权。');
+  assert.equal((await first.json()).error.message, '通讯录授权范围未知或字段缺失。');
   safe = false;
   const second = await post('/api/resolve/employee-numbers', { numbers: ['E1001'] });
   assert.equal(second.status, 502);
@@ -75,7 +75,7 @@ test('safe directory errors expose a useful reason but raw upstream errors stay 
 
 test('full scan capacity does not block the separate login capacity', async t => {
   const directory = blockingDirectory();
-  const config = { mode: 'feishu', appId: 'cli_test', appSecret: 'test-secret', tenantKey: 'tenant-test', maxConcurrentQueries: 1 };
+  const config = { mode: 'feishu', appId: 'cli_test', appSecret: 'test-secret', tenantKey: 'tenant-test', maxConcurrentQueries: 1, directoryCachePath: null };
   const fetchImpl = async url => new Response(JSON.stringify(url.includes('/token')
     ? { code: 0, access_token: 'user-token', expires_in: 7200 }
     : { code: 0, data: { tenant_key: 'tenant-test', open_id: 'ou_test', name: '测试' } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
