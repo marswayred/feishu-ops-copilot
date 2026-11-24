@@ -9,6 +9,9 @@ function slimUser(user) {
     name: typeof user.name === 'string' ? user.name : '',
     employee_no: typeof user.employee_no === 'string' ? user.employee_no : '',
     enterprise_email: typeof user.enterprise_email === 'string' ? user.enterprise_email : '',
+    ...(Array.isArray(user.department_ids)
+      ? { department_ids: user.department_ids.filter(id => typeof id === 'string') }
+      : {}),
     is_frozen: user.is_frozen === true,
     status: user.status && typeof user.status === 'object'
       ? {

@@ -64,7 +64,7 @@ test('demo bootstrap and both resolve modes work without live credentials', asyn
   const boot = await response.json();
   assert.equal(boot.mode, 'demo');
   assert.equal(boot.authenticated, true);
-  assert.equal(boot.demoContacts.length, 4);
+  assert.equal(boot.demoContacts.length, 8);
   assert.equal(boot.limits.employeeNumbers, 1000);
   const byNumber = await request('/api/resolve/employee-numbers', { method: 'POST', body: { numbers: ['E1001', 'E1003'] } });
   assert.equal(byNumber.status, 200);
@@ -128,7 +128,7 @@ test('OAuth uses v3 then user_info, rotates HttpOnly sessions and logout revokes
   const first = await login(request);
   const setCookie = first.response.headers.get('set-cookie');
   assert.match(setCookie, /HttpOnly/);
-  assert.match(setCookie, /SameSite=Strict/);
+  assert.match(setCookie, /SameSite=Lax/);
   assert.match(setCookie, /Max-Age=3600/);
   assert.doesNotMatch(setCookie, /Secure/);
   assert.equal(calls[0].url, 'https://accounts.feishu.cn/oauth/v3/token');

@@ -4,7 +4,7 @@ try {
   const config = loadConfig();
   const app = createApp({ config });
   const server = app.listen(config.port, config.host, () => {
-    console.log(`邮箱整理助手已启动：http://${config.host}:${config.port}（${config.mode === 'demo' ? '演示模式：虚构数据' : '飞书模式'}）`);
+    console.log(`飞书运营助手已启动：http://${config.host}:${config.port}（${config.mode === 'demo' ? '演示模式：虚构数据' : '飞书模式'}）`);
   });
   server.requestTimeout = 30_000;
   server.headersTimeout = 15_000;
@@ -14,6 +14,7 @@ try {
     process.exitCode = 1;
   });
   const shutdown = () => {
+    app.locals.close?.();
     server.close(() => process.exit(0));
     setTimeout(() => { server.closeAllConnections(); process.exit(0); }, 5000).unref();
   };

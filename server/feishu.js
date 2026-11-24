@@ -221,6 +221,10 @@ export class FeishuDirectory {
     return new FeishuDirectory(this.client, { signal, cache: this.cache });
   }
 
+  async clearCache() {
+    if (typeof this.cache?.clear === 'function') await this.cache.clear();
+  }
+
   async *_pages(path, query = {}) {
     const tokens = new Set();
     let pageToken;
@@ -404,4 +408,92 @@ export class FeishuDirectory {
     }
     return result;
   }
+}
+
+export function buildReminderCard({ title, version = 'v1.0', deadlineAt = '', summary = '', ackUrl }) {
+  if (typeof title !== 'string' || !title.trim()) throw new TypeError('催办卡片标题不能为空');
+  if (typeof ackUrl !== 'string' || !/^https?:\/\//.test(ackUrl)) throw new TypeError('催办卡片确认链接无效');
+  const excerpt = typeof summary === 'string' && summary.trim()
+    ? summary.trim().slice(0, 180) + (summary.trim().length > 180 ? '…' : '')
+    : '请点击下方按钮阅读重要文件内容并完成实名确认。';
+  const elements = [
+    {
+      tag: 'div',
+      text: {
+        tag: 'lark_md',
+        content: `**文件版本**：${version}${deadlineAt ? `　|　**截止时间**：${deadlineAt}` : ''}\n${excerpt}`,
+      },
+    },
+    {
+      tag: 'action',
+      actions: [
+        {
+          tag: 'button',
+          text: { tag: 'plain_text', content: '前往阅读并实名确认' },
+          type: 'primary',
+          url: ackUrl,
+        },
+      ],
+    },
+    {
+      tag: 'note',
+      elements: [{ tag: 'plain_text', content: '来自飞书运营助手 · 确认记录将与本人飞书身份绑定' }],
+    },
+  ];
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      template: 'blue',
+      title: { tag: 'plain_text', content: `待确认提醒：${title.trim().slice(0, 80)}` },
+    },
+    elements,
+  };
+}
+
+export async function sendFeishuReminderCards(client, {
+  recipients,
+  card,
+  batchId = '',
+  signal,
+  concurrency = 5,
+} = {}) {
+  if (typeof client?.request !== 'function') throw new TypeError('client 必须实现 request');
+  if (!Array.isArray(recipients)) throw new TypeError('recipients 必须为数组');
+  const content = JSON.stringify(card);
+  let sentCount = 0;
+  const failures = [];
+  await mapPool(recipients, concurrency, async (recipient, index) => {
+    signal?.throwIfAborted();
+    const openId = recipient?.openId;
+    if (typeof openId !== 'string' || !openId.trim()) return;
+    const uuid = batchId ? `${batchId}-${index}`.slice(0, 50) : undefined;
+    try {
+      await client.request('/im/v1/messages', {
+        method: 'POST',
+        signal,
+        query: { receive_id_type: 'open_id' },
+        body: {
+          receive_id: openId.trim(),
+          msg_type: 'interactive',
+          content,
+          ...(uuid ? { uuid } : {}),
+        },
+      });
+      sentCount += 1;
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason || error;
+      failures.push({
+        openId,
+        name: recipient?.name || openId,
+        code: error?.code ?? 'SEND_FAILED',
+        message: '未能送达飞书机器人消息，请检查应用是否启用机器人能力、im:message:send_as_bot 权限及成员可见范围。',
+      });
+    }
+  });
+  return {
+    total: recipients.length,
+    sentCount,
+    failedCount: failures.length,
+    failures,
+  };
 }

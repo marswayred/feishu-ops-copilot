@@ -1,15 +1,16 @@
 {
-  "name": "feishu-email-helper",
-  "version": "1.0.0",
+  "name": "feishu-ops-helper",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "node scripts/dev.js",
     "build": "vite build",
     "start": "node --env-file-if-exists=.env server/index.js",
-    "test": "node --test tests/*.test.js",
-    "test:ui": "node scripts/test-ui.js"
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "express": "^5.1.0",

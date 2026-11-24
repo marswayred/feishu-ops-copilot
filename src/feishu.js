@@ -5,12 +5,13 @@ export function isFeishuClient() {
   return /Lark|Feishu/i.test(navigator.userAgent);
 }
 
-export async function api(path, body) {
+export async function api(path, body, { method } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000);
+  const resolvedMethod = method || (body === undefined ? 'GET' : 'POST');
   try {
     const response = await fetch(path, {
-      method: body === undefined ? 'GET' : 'POST',
+      method: resolvedMethod,
       credentials: 'same-origin',
       headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -21,14 +22,22 @@ export async function api(path, body) {
     if (!response.ok) {
       const error = new Error(data.error?.message || '请求失败，请稍后重试。');
       error.status = response.status;
+      error.code = data.error?.code;
       throw error;
     }
     return data;
   } catch (error) {
-    if (error.name === 'AbortError') throw new Error('查询超时，请缩小查询范围后重试。');
+    if (error.name === 'AbortError') throw new Error('请求超时，请缩小查询范围或稍后重试。');
     if (error instanceof TypeError) throw new Error('无法连接服务，请检查网络后重试。');
     throw error;
-  } finally { clearTimeout(timer); }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function startWebOAuthLogin(returnTo = window.location.pathname) {
+  const safePath = typeof returnTo === 'string' && returnTo.startsWith('/') ? returnTo : '/';
+  window.location.assign(`/api/auth/oauth/start?returnTo=${encodeURIComponent(safePath)}`);
 }
 
 export function loadFeishuSDK() {
@@ -56,12 +65,18 @@ export function loadFeishuSDK() {
     script.onload = ready;
     script.onerror = () => finish(new Error('飞书 SDK 下载失败，请检查是否能访问飞书 CDN。'));
     document.head.appendChild(script);
-  }).catch(error => { sdkPromise = undefined; throw error; });
+  }).catch(error => {
+    sdkPromise = undefined;
+    throw error;
+  });
   return sdkPromise;
 }
 
-export async function loginFeishu(appId) {
-  if (!isFeishuClient()) throw new Error('请从飞书工作台打开此应用。普通浏览器无法使用飞书免登和原生选择器。');
+export async function loginFeishu(appId, returnTo = window.location.pathname) {
+  if (!isFeishuClient()) {
+    startWebOAuthLogin(returnTo);
+    return null;
+  }
   const tt = await loadFeishuSDK();
   if (!tt.requestAccess) throw new Error('请将飞书升级至 6.9 或以上版本后重试。');
   const state = crypto.randomUUID();
@@ -82,6 +97,9 @@ export async function loginFeishu(appId) {
 }
 
 export async function chooseFeishuContacts(selectedUsers) {
+  if (!isFeishuClient()) {
+    throw new Error('飞书原生成员选择器仅支持在飞书客户端内调用；在普通浏览器中请改用「按工号指定」或「全员通讯录」。');
+  }
   const tt = await loadFeishuSDK();
   const url = window.location.href.split('#')[0];
   const config = await api(`/api/feishu/js-config?url=${encodeURIComponent(url)}`);
@@ -98,7 +116,6 @@ export async function chooseFeishuContacts(selectedUsers) {
       const detail = typeof err === 'string' ? err : (err?.errMsg || err?.errString || err?.message || '');
       return new Error(detail ? `选择器鉴权失败：${detail}` : '选择器鉴权失败，请检查应用安全域名和 JS SDK 配置。');
     };
-    // 官方约定：config + error + ready；onSuccess/onFail 为鉴权结果，ready 表示可调 JSAPI
     window.h5sdk.error(err => finish(failMessage(err)));
     window.h5sdk.config({
       appId: config.appId,
@@ -134,4 +151,20 @@ export async function chooseFeishuContacts(selectedUsers) {
       },
     });
   });
+}
+
+export async function copyTextWithFallback(text, inputRef) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return { ok: true, message: '' };
+  } catch {
+    if (inputRef?.current) {
+      inputRef.current.focus();
+      inputRef.current.select?.();
+    }
+    return {
+      ok: false,
+      message: '浏览器未允许自动复制，已选中文本，请按 Ctrl+C（Mac 使用 Cmd+C）手动复制。',
+    };
+  }
 }
