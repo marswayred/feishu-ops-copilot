@@ -15,7 +15,7 @@ import { api, isFeishuClient, loginFeishu, startWebOAuthLogin } from '../feishu.
 const Icon = ({ icon: Component, ...props }) => <Component size={18} strokeWidth={1.8} aria-hidden="true" {...props} />;
 
 function formatDateTime(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return date.toLocaleString('zh-CN', {
@@ -78,7 +78,6 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
     }
   }
 
-  // 飞书客户端 / 催办卡片内打开确认页时自动免登。
   useEffect(() => {
     if (!bootstrap || demo || bootstrap.authenticated || !payload || payload.authenticated) return;
     if (!inFeishuClient || autoLoginAttempted.current || authBusy) return;
@@ -104,8 +103,8 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
   if (loading && !payload) {
     return (
       <div className="ack-container">
-        <div className="surface-box loading-box">
-          <Icon icon={LoaderCircle} size={28} className="spin" />
+        <div className="surface-box optical-surface loading-box">
+          <Icon icon={LoaderCircle} size={26} className="spin" />
           <span>正在加载文件确认单据…</span>
         </div>
       </div>
@@ -146,17 +145,24 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
         </div>
       )}
 
-      <article className="surface-box ack-sheet" aria-labelledby="ack-doc-title">
+      <article
+        className={`surface-box optical-surface ${ack ? 'optical-surface--emerald' : ''} ack-sheet`}
+        aria-labelledby="ack-doc-title"
+      >
         <div className="ack-sheet-header">
+          <h1 id="ack-doc-title">{task.title}</h1>
           <div className="ack-meta-row">
-            <span className="badge version-badge">文件版本 {task.version}</span>
-            <span className={`badge ${ack || task.status === 'active' ? 'status-active' : 'status-closed'}`}>
+            <span className="badge version-badge">版本 {task.version}</span>
+            <span
+              className={`badge ${
+                ack ? 'status-active' : task.status === 'active' ? 'status-pending' : 'status-closed'
+              }`}
+            >
               {ack ? '本人已签收' : task.status === 'active' ? '待实名签收' : '已截止归档'}
             </span>
-            {task.deadlineAt && <span className="ack-deadline">截止日期：{task.deadlineAt}</span>}
+            <span className="ack-publisher">发布人：{task.createdByName}</span>
+            {task.deadlineAt && <span className="ack-deadline">截止：{task.deadlineAt}</span>}
           </div>
-          <h1 id="ack-doc-title">{task.title}</h1>
-          <p className="ack-publisher">发布人：{task.createdByName}</p>
         </div>
 
         {!payload.authenticated ? (
@@ -192,11 +198,11 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
             <div className="identity-strip">
               <Icon icon={UserCheck} size={18} />
               <div className="identity-strip-text">
-                <span>当前确认身份：<strong>{user.name}</strong></span>
+                <span>当前实名身份：<strong>{user.name}</strong></span>
                 {user.employeeNo && <code>{user.employeeNo}</code>}
-                {user.departmentNames && <span>· {user.departmentNames}</span>}
+                {user.departmentNames && <span>{user.departmentNames}</span>}
               </div>
-              {demo && <span className="identity-demo-tip">可在顶部栏切换其他演示员工体验</span>}
+              {demo && <span className="identity-demo-tip">可在顶部切换演示员工体验</span>}
             </div>
 
             {!payload.eligible ? (
@@ -330,7 +336,7 @@ export function MyAcksView({ bootstrap, onNavigate }) {
         </div>
       )}
 
-      <section className="surface-box tasks-list-surface">
+      <section className="surface-box optical-surface tasks-list-surface">
         {loading ? (
           <div className="loading-box">
             <Icon icon={LoaderCircle} size={24} className="spin" />
@@ -339,7 +345,7 @@ export function MyAcksView({ bootstrap, onNavigate }) {
         ) : acks.length === 0 ? (
           <div className="result-empty compact-empty">
             <div className="empty-symbol">
-              <Icon icon={FileText} size={28} />
+              <Icon icon={FileText} size={24} />
             </div>
             <h3>暂无已确认记录</h3>
             <p>当你通过邮件中的确认链接完成文件阅读确认后，电子回执会自动保存在这里。</p>
@@ -361,7 +367,6 @@ export function MyAcksView({ bootstrap, onNavigate }) {
                   </div>
                   <div className="task-row-meta">
                     <span>回执编号：<code>{item.receiptNo}</code></span>
-                    <span>·</span>
                     <span className="tabular">确认时间：{formatDateTime(item.confirmedAt)}</span>
                   </div>
                 </div>

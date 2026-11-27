@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
-  BellRing,
   Check,
   CheckCheck,
   ChevronRight,
@@ -19,7 +18,6 @@ import {
   RefreshCw,
   Search,
   Send,
-  ShieldCheck,
   Trash2,
   Unlock,
   UserPlus,
@@ -33,7 +31,7 @@ import { parseNumbers } from './MailView.jsx';
 const Icon = ({ icon: Component, ...props }) => <Component size={18} strokeWidth={1.8} aria-hidden="true" {...props} />;
 
 function formatDateTime(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return date.toLocaleString('zh-CN', {
@@ -70,6 +68,7 @@ function scopeLabel(scopeType) {
 export function TasksView({
   bootstrap,
   ready,
+  mode = 'list',
   activeSlug,
   draftAudience,
   onClearDraftAudience,
@@ -80,7 +79,6 @@ export function TasksView({
   const [tasks, setTasks] = useState([]);
   const [loadingList, setLoadingList] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
   const [error, setError] = useState('');
   const [banner, setBanner] = useState('');
 
@@ -126,7 +124,6 @@ export function TasksView({
       setNumbersText(draftAudience.numbersText || '');
       setSelected(draftAudience.selected || { users: [], departments: [] });
       setIncludeChildren(draftAudience.includeChildren !== false);
-      setShowCreateForm(true);
       onClearDraftAudience?.();
     }
   }, [draftAudience, onClearDraftAudience]);
@@ -166,13 +163,17 @@ export function TasksView({
 
   useEffect(() => {
     if (!ready) return;
-    if (activeSlug) {
+    if (mode === 'detail' && activeSlug) {
       fetchTaskDetail(activeSlug);
+    } else if (mode === 'new') {
+      setDetail(null);
+      setError('');
+      setBanner('');
     } else {
       setDetail(null);
       fetchTaskList();
     }
-  }, [ready, activeSlug]);
+  }, [ready, mode, activeSlug]);
 
   async function triggerCopy(key, text, ref) {
     setCopyFallbackMsg('');
@@ -253,7 +254,6 @@ export function TasksView({
         allowOutOfScope,
         scope,
       });
-      setShowCreateForm(false);
       setTitle('');
       setSummary('');
       setDocUrl('');
@@ -310,8 +310,8 @@ export function TasksView({
 
   async function handleDeleteTask(item) {
     if (!item?.slug || deletingSlug) return;
-    const title = item.title || '这条任务';
-    if (!window.confirm(`删除「${title}」？签收记录会一并删除，且无法恢复。`)) return;
+    const itemTitle = item.title || '这条任务';
+    if (!window.confirm(`删除「${itemTitle}」？签收记录会一并删除，且无法恢复。`)) return;
     setDeletingSlug(item.slug);
     setError('');
     try {
@@ -367,7 +367,7 @@ export function TasksView({
   }
 
   // ─── 详情对账视图 ────────────────────────────────────────────────────────────
-  if (activeSlug) {
+  if (mode === 'detail' && activeSlug) {
     const task = detail?.task;
     const report = detail?.report;
     const stats = report?.stats;
@@ -375,6 +375,15 @@ export function TasksView({
     const filterPeople = list => (list || []).filter(item =>
       `${item.name} ${item.employeeNo} ${item.email} ${item.departmentNames}`.toLocaleLowerCase().includes(q),
     );
+
+    const beamTotal = stats ? Math.max(1, stats.activeTargetCount) : 1;
+    const beamGap = stats && stats.confirmedCount > 0 && stats.pendingCount > 0 ? 6 : 0;
+    const confirmedW = stats
+      ? Math.round(((1000 - beamGap) * stats.confirmedCount) / beamTotal)
+      : 0;
+    const pendingW = stats
+      ? Math.max(0, 1000 - beamGap - confirmedW) * (stats.pendingCount > 0 ? 1 : 0)
+      : 0;
 
     return (
       <>
@@ -434,526 +443,575 @@ export function TasksView({
         )}
 
         {loadingDetail && !detail ? (
-          <div className="surface-box loading-box">
-            <Icon icon={LoaderCircle} size={28} className="spin" />
+          <div className="surface-box optical-surface loading-box">
+            <Icon icon={LoaderCircle} size={26} className="spin" />
             <span>正在加载任务与实时通讯录对账结果…</span>
           </div>
         ) : task && report ? (
-          <div className="surface-box task-detail-surface">
-            <div className="task-detail-header">
-              <div>
-                <div className="task-title-row">
-                  <h1>{task.title}</h1>
-                  <span className="badge version-badge">{task.version}</span>
-                  <span className={`badge ${task.status === 'active' ? 'status-active' : 'status-closed'}`}>
-                    {task.status === 'active' ? '收集中' : '已截止归档'}
-                  </span>
+          <>
+            <section
+              className="beam-panel"
+              aria-label="实时通讯录对账分束总览"
+            >
+              <div className="beam-metrics beam-metrics--five" role="status">
+                <div className="beam-node">
+                  <span className="beam-node-value">{stats.activeTargetCount}</span>
+                  <span className="beam-node-label">应确认在职基准</span>
                 </div>
-                <p className="task-meta-line">
-                  范围：{scopeLabel(task.scopeType)}
-                  {task.deadlineAt ? ` · 截止日期：${task.deadlineAt}` : ''}
-                  {` · 创建人：${task.createdByName}`}
-                </p>
+                <button
+                  type="button"
+                  className={`beam-node ${ledgerTab === 'confirmed' ? 'beam-node--active' : ''}`}
+                  onClick={() => setLedgerTab('confirmed')}
+                >
+                  <span className="beam-node-value beam-node-value--emerald">
+                    {stats.confirmedCount} · {stats.completionPercent}%
+                  </span>
+                  <span className="beam-node-label">已实名确认</span>
+                </button>
+                <button
+                  type="button"
+                  className={`beam-node ${ledgerTab === 'pending' ? 'beam-node--active' : ''}`}
+                  onClick={() => setLedgerTab('pending')}
+                >
+                  <span className={`beam-node-value ${stats.pendingCount > 0 ? 'beam-node-value--amber' : ''}`}>
+                    {stats.pendingCount}
+                  </span>
+                  <span className="beam-node-label">在职待确认</span>
+                </button>
+                <button
+                  type="button"
+                  className={`beam-node ${ledgerTab === 'joined' ? 'beam-node--active' : ''}`}
+                  onClick={() => setLedgerTab('joined')}
+                >
+                  <span className={`beam-node-value ${stats.joinedAfterCount > 0 ? 'beam-node-value--cobalt' : ''}`}>
+                    {stats.joinedAfterCount}
+                  </span>
+                  <span className="beam-node-label">期间新入职</span>
+                </button>
+                <button
+                  type="button"
+                  className={`beam-node ${ledgerTab === 'excluded' ? 'beam-node--active' : ''}`}
+                  onClick={() => setLedgerTab('excluded')}
+                >
+                  <span className="beam-node-value">{stats.inactiveCount + stats.outOfScopeCount}</span>
+                  <span className="beam-node-label">离职剔除 / 范围外</span>
+                </button>
               </div>
-              <div className="task-lifecycle-actions">
-                {task.status === 'active' && (
+              <div className="beam-track" aria-hidden="true">
+                <svg className="beam-svg" viewBox="0 0 1000 6" preserveAspectRatio="none">
+                  <rect className="beam-seg-emerald" x="0" y="0" width={confirmedW} height="6" />
+                  <rect className="beam-seg-amber" x={confirmedW + beamGap} y="0" width={pendingW} height="6" />
+                </svg>
+                <div className="beam-scale">
+                  <span>0%</span>
+                  <span>50%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+            </section>
+
+            <div
+              className={`surface-box optical-surface ${
+                stats.pendingCount === 0 && stats.activeTargetCount > 0 ? 'optical-surface--emerald' : ''
+              } task-detail-surface`}
+            >
+              <div className="task-detail-header">
+                <div>
+                  <div className="task-title-row">
+                    <h1>{task.title}</h1>
+                    <span className="badge version-badge">{task.version}</span>
+                    <span className={`badge ${task.status === 'active' ? 'status-active' : 'status-closed'}`}>
+                      {task.status === 'active' ? '收集中' : '已截止归档'}
+                    </span>
+                  </div>
+                  <p className="task-meta-line">
+                    范围：{scopeLabel(task.scopeType)}
+                    {task.deadlineAt ? ` · 截止日期：${task.deadlineAt}` : ''}
+                    {` · 创建人：${task.createdByName}`}
+                  </p>
+                </div>
+                <div className="task-lifecycle-actions">
+                  {task.status === 'active' && (
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => {
+                        setShowBumpForm(v => !v);
+                        setNextVersion('');
+                        setNextSummary(task.summary);
+                        setNextSha256(task.fileSha256);
+                      }}
+                    >
+                      发布新版重签
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="button secondary"
-                    onClick={() => {
-                      setShowBumpForm(v => !v);
-                      setNextVersion('');
-                      setNextSummary(task.summary);
-                      setNextSha256(task.fileSha256);
-                    }}
+                    disabled={togglingStatus}
+                    onClick={handleToggleStatus}
                   >
-                    发布新版重签
+                    <Icon icon={task.status === 'active' ? Lock : Unlock} size={15} />
+                    {task.status === 'active' ? '截止归档' : '重新开放'}
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="button secondary"
-                  disabled={togglingStatus}
-                  onClick={handleToggleStatus}
-                >
-                  <Icon icon={task.status === 'active' ? Lock : Unlock} size={15} />
-                  {task.status === 'active' ? '截止归档' : '重新开放'}
-                </button>
-                <button
-                  type="button"
-                  className="button danger-button"
-                  disabled={deletingSlug === task.slug}
-                  onClick={() => handleDeleteTask(task)}
-                >
-                  <Icon icon={Trash2} size={15} />
-                  {deletingSlug === task.slug ? '正在删除…' : '删除'}
-                </button>
-              </div>
-            </div>
-
-            {showBumpForm && (
-              <form className="inline-subform" onSubmit={handleBumpVersion}>
-                <div className="section-heading">
-                  <h2>升级文件版本并重新发起确认</h2>
-                  <button type="button" className="text-button" onClick={() => setShowBumpForm(false)}>取消</button>
-                </div>
-                <div className="form-field">
-                  <label className="form-label" htmlFor="bump-version">新版本号</label>
-                  <input
-                    id="bump-version"
-                    className="text-input"
-                    required
-                    placeholder="例如 v2.0"
-                    value={nextVersion}
-                    onChange={e => setNextVersion(e.target.value)}
-                  />
-                </div>
-                <div className="form-field">
-                  <label className="form-label" htmlFor="bump-summary">新版必读说明</label>
-                  <textarea
-                    id="bump-summary"
-                    rows={3}
-                    value={nextSummary}
-                    onChange={e => setNextSummary(e.target.value)}
-                  />
-                </div>
-                <div className="form-actions-right">
-                  <button type="submit" className="button primary" disabled={bumping || !nextVersion.trim()}>
-                    {bumping ? '正在发布…' : '确认发布新版本'}
+                  <button
+                    type="button"
+                    className="button danger-button"
+                    disabled={deletingSlug === task.slug}
+                    onClick={() => handleDeleteTask(task)}
+                  >
+                    <Icon icon={Trash2} size={15} />
+                    {deletingSlug === task.slug ? '正在删除…' : '删除'}
                   </button>
                 </div>
-              </form>
-            )}
-
-            <div className="link-bar">
-              <div className="link-bar-main">
-                <span className="link-bar-label">员工邮件确认链接</span>
-                <code className="ack-url-code">{task.ackUrl}</code>
               </div>
-              <div className="link-bar-buttons">
-                <button
-                  type="button"
-                  className={`button ${copiedKey === 'url' ? 'success-button' : 'secondary'}`}
-                  onClick={() => triggerCopy('url', task.ackUrl)}
-                >
-                  <Icon icon={copiedKey === 'url' ? Check : Copy} size={15} />
-                  {copiedKey === 'url' ? '已复制链接' : '复制确认链接'}
-                </button>
-                <button
-                  type="button"
-                  className={`button ${copiedKey === 'tpl' ? 'success-button' : 'primary'}`}
-                  onClick={() => triggerCopy('tpl', buildEmailTemplate(task))}
-                >
-                  <Icon icon={copiedKey === 'tpl' ? Check : Mail} size={15} />
-                  {copiedKey === 'tpl' ? '已复制邮件正文' : '复制邮件通知文案'}
-                </button>
-              </div>
-            </div>
 
-            <div className="result-summary reconcile-summary" role="status">
-              <span>应确认在职 <strong>{stats.activeTargetCount}</strong> 人</span>
-              <Icon icon={ChevronRight} size={14} />
-              <span className="summary-final">
-                已确认 <strong>{stats.confirmedCount}</strong> 人（<strong>{stats.completionPercent}%</strong>）
-              </span>
-              <Icon icon={ChevronRight} size={14} />
-              <span className={stats.pendingCount > 0 ? 'summary-pending' : ''}>
-                待确认 <strong>{stats.pendingCount}</strong> 人
-              </span>
-              {(stats.joinedAfterCount > 0 || stats.inactiveCount > 0) && (
-                <span className="summary-extra">
-                  {stats.joinedAfterCount > 0 && `期间新入职 ${stats.joinedAfterCount} 人`}
-                  {stats.joinedAfterCount > 0 && stats.inactiveCount > 0 && ' · '}
-                  {stats.inactiveCount > 0 && `已离职自动剔除 ${stats.inactiveCount} 人`}
-                </span>
-              )}
-            </div>
-
-            {stats.pendingCount > 0 && (
-              <div className="remind-grid">
-                <div className="remind-column">
-                  <div className="field-heading">
-                    <label htmlFor="pending-emails-box">
-                      待确认在职人员邮箱集合（{stats.pendingEmailCount} 个可复制）
-                    </label>
-                    {stats.pendingMissingEmailCount > 0 && (
-                      <span className="warn-inline">
-                        另有 {stats.pendingMissingEmailCount} 人缺企业邮箱
-                      </span>
-                    )}
+              {showBumpForm && (
+                <form className="inline-subform" onSubmit={handleBumpVersion}>
+                  <div className="section-heading">
+                    <h2>升级文件版本并重新发起确认</h2>
+                    <button type="button" className="text-button" onClick={() => setShowBumpForm(false)}>取消</button>
                   </div>
-                  <textarea
-                    id="pending-emails-box"
-                    ref={unreadEmailRef}
-                    className="compact-email-output"
-                    readOnly
-                    value={report.pendingEmailText}
-                    placeholder="待确认成员均未配置企业邮箱，请使用右侧飞书卡片催办。"
-                    spellCheck={false}
-                  />
-                  <div className="copy-row">
-                    <span>未确认邮箱</span>
-                    <button
-                      type="button"
-                      className={`button ${copiedKey === 'pending-emails' ? 'success-button' : 'primary'}`}
-                      disabled={!report.pendingEmails.length}
-                      onClick={() => triggerCopy('pending-emails', report.pendingEmailText, unreadEmailRef)}
-                    >
-                      <Icon icon={copiedKey === 'pending-emails' ? Check : Copy} size={15} />
-                      {copiedKey === 'pending-emails' ? '已复制未确认邮箱' : `复制未确认邮箱 (${stats.pendingEmailCount})`}
+                  <div className="form-field">
+                    <label className="form-label" htmlFor="bump-version">新版本号</label>
+                    <input
+                      id="bump-version"
+                      className="text-input"
+                      required
+                      placeholder="例如 v2.0"
+                      value={nextVersion}
+                      onChange={e => setNextVersion(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label" htmlFor="bump-summary">新版必读说明</label>
+                    <textarea
+                      id="bump-summary"
+                      rows={3}
+                      value={nextSummary}
+                      onChange={e => setNextSummary(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-actions-right">
+                    <button type="submit" className="button primary" disabled={bumping || !nextVersion.trim()}>
+                      {bumping ? '正在发布…' : '确认发布新版本'}
                     </button>
                   </div>
-                </div>
+                </form>
+              )}
 
-                <div className="remind-column remind-bot-column">
-                  <div className="field-heading">
-                    <label>飞书机器人定向卡片催办</label>
-                    {task.lastRemindedAt && (
-                      <span className="muted-inline">上次推送：{formatDateTime(task.lastRemindedAt)}</span>
-                    )}
-                  </div>
-                  <div className="bot-action-row">
-                    <button
-                      type="button"
-                      className="button primary"
-                      disabled={reminding || task.status !== 'active'}
-                      onClick={handleSendReminders}
-                    >
-                      <Icon icon={reminding ? LoaderCircle : Send} size={15} className={reminding ? 'spin' : ''} />
-                      {reminding ? '正在推送催办卡片…' : `发送飞书催办卡片 (${stats.pendingCount} 人)`}
-                    </button>
-                  </div>
-                  {detail.reminderLogs?.length > 0 && (
-                    <div className="reminder-log-line">
-                      最近记录：{formatDateTime(detail.reminderLogs[0].createdAt)} 由 {detail.reminderLogs[0].triggeredBy} 触发，送达 {detail.reminderLogs[0].sentCount}/{detail.reminderLogs[0].totalTargets} 人
-                    </div>
-                  )}
+              <div className="link-bar">
+                <div className="link-bar-main">
+                  <span className="link-bar-label">员工邮件确认链接</span>
+                  <code className="ack-url-code">{task.ackUrl}</code>
+                </div>
+                <div className="link-bar-buttons">
+                  <button
+                    type="button"
+                    className={`button ${copiedKey === 'url' ? 'success-button' : 'secondary'}`}
+                    onClick={() => triggerCopy('url', task.ackUrl)}
+                  >
+                    <Icon icon={copiedKey === 'url' ? Check : Copy} size={15} />
+                    {copiedKey === 'url' ? '已复制链接' : '复制确认链接'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`button ${copiedKey === 'tpl' ? 'success-button' : 'secondary'}`}
+                    onClick={() => triggerCopy('tpl', buildEmailTemplate(task))}
+                  >
+                    <Icon icon={copiedKey === 'tpl' ? Check : Mail} size={15} />
+                    {copiedKey === 'tpl' ? '已复制邮件正文' : '复制邮件通知文案'}
+                  </button>
                 </div>
               </div>
-            )}
 
-            {copyFallbackMsg && <p className="copy-error" role="alert">{copyFallbackMsg}</p>}
-
-            <div className="ledger-toolbar">
-              <div className="detail-tabs ledger-tabs" role="tablist" onKeyDown={navigateTabs} aria-label="通讯录对账分组">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={ledgerTab === 'pending'}
-                  onClick={() => setLedgerTab('pending')}
-                >
-                  待确认 <span>{stats.pendingCount}</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={ledgerTab === 'confirmed'}
-                  onClick={() => setLedgerTab('confirmed')}
-                >
-                  已确认 <span>{stats.confirmedCount}</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={ledgerTab === 'departments'}
-                  onClick={() => setLedgerTab('departments')}
-                >
-                  部门进度 <span>{report.departmentBreakdown.length}</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={ledgerTab === 'joined'}
-                  onClick={() => setLedgerTab('joined')}
-                >
-                  期间新入职 <span>{stats.joinedAfterCount}</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={ledgerTab === 'excluded'}
-                  onClick={() => setLedgerTab('excluded')}
-                >
-                  已剔除 / 范围外 <span>{stats.inactiveCount + stats.outOfScopeCount}</span>
-                </button>
-              </div>
-              {ledgerTab !== 'departments' && (
-                <div className="ledger-search">
-                  <Icon icon={Search} size={15} />
-                  <input
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="筛选姓名、工号或部门"
-                    aria-label="筛选对账人员名单"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="ledger-body">
-              {ledgerTab === 'pending' && (
-                filterPeople(report.pending).length ? (
-                  <div className="ledger-table-wrap">
-                    <table className="ledger-table">
-                      <thead>
-                        <tr>
-                          <th>姓名</th>
-                          <th>工号</th>
-                          <th>部门</th>
-                          <th>企业邮箱</th>
-                          <th>状态说明</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filterPeople(report.pending).map(person => (
-                          <tr key={person.openId}>
-                            <td><strong>{person.name}</strong></td>
-                            <td><code>{person.employeeNo || '—'}</code></td>
-                            <td>{person.departmentNames}</td>
-                            <td>
-                              {person.email ? (
-                                <code>{person.email}</code>
-                              ) : (
-                                <span className="warn-inline">未配置企业邮箱</span>
-                              )}
-                            </td>
-                            <td>
-                              <span className="status-text pending-text">
-                                {person.source === 'joined_after' ? '新入职补纳入 · 待确认' : '在职待确认'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="details-clear">
-                    <Icon icon={CheckCheck} />
-                    <span>{searchQuery ? '没有匹配的待确认成员' : '当前目标范围内所有在职成员均已完成确认'}</span>
-                  </div>
-                )
-              )}
-
-              {ledgerTab === 'confirmed' && (
-                filterPeople(report.confirmed).length ? (
-                  <div className="ledger-table-wrap">
-                    <table className="ledger-table">
-                      <thead>
-                        <tr>
-                          <th>姓名</th>
-                          <th>工号</th>
-                          <th>部门</th>
-                          <th>确认时间</th>
-                          <th>认证方式</th>
-                          <th>回执编号</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filterPeople(report.confirmed).map(person => (
-                          <tr key={person.openId}>
-                            <td><strong>{person.name}</strong></td>
-                            <td><code>{person.employeeNo || '—'}</code></td>
-                            <td>{person.departmentNames}</td>
-                            <td className="tabular">{formatDateTime(person.confirmedAt)}</td>
-                            <td>
-                              {person.authChannel === 'web_oauth'
-                                ? '邮件外链 · 飞书网页授权'
-                                : person.authChannel === 'demo'
-                                  ? '演示环境实名确认'
-                                  : '飞书客户端免登'}
-                            </td>
-                            <td><code>{person.receiptNo}</code></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="no-matches">尚无已确认记录。</p>
-                )
-              )}
-
-              {ledgerTab === 'departments' && (
-                report.departmentBreakdown.length ? (
-                  <div className="ledger-table-wrap">
-                    <table className="ledger-table">
-                      <thead>
-                        <tr>
-                          <th>部门</th>
-                          <th>应确认在职</th>
-                          <th>已确认</th>
-                          <th>待确认</th>
-                          <th>部门完成率</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {report.departmentBreakdown.map(dept => (
-                          <tr key={dept.department}>
-                            <td><strong>{dept.department}</strong></td>
-                            <td className="tabular">{dept.total} 人</td>
-                            <td className="tabular">{dept.confirmed} 人</td>
-                            <td className="tabular">{dept.pending} 人</td>
-                            <td className="tabular">
-                              <div className="dept-progress-cell">
-                                <div className="dept-progress-track" aria-hidden="true">
-                                  <div className="dept-progress-fill" style={{ width: `${dept.ratePercent}%` }} />
-                                </div>
-                                <strong>{dept.ratePercent}%</strong>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="no-matches">暂无部门维度统计数据。</p>
-                )
-              )}
-
-              {ledgerTab === 'joined' && (
-                report.joinedAfter.length ? (
-                  <>
-                    <div className="joiner-callout">
-                      <span>
-                        以下 <strong>{report.joinedAfter.length}</strong> 位在职成员在任务创建时尚未在快照内（属于发布后新入职或转入目标部门），默认未计入原分母。你可将其纳入本次任务并补发通知：
-                      </span>
-                      {task.status === 'active' && (
-                        <button
-                          type="button"
-                          className="button primary"
-                          disabled={includingJoiners}
-                          onClick={handleIncludeJoiners}
-                        >
-                          <Icon icon={includingJoiners ? LoaderCircle : UserPlus} size={15} className={includingJoiners ? 'spin' : ''} />
-                          全部纳入本次任务快照
-                        </button>
+              {stats.pendingCount > 0 && (
+                <div className="remind-grid">
+                  <div className="remind-column">
+                    <div className="field-heading">
+                      <label htmlFor="pending-emails-box">
+                        待确认在职人员邮箱集合（{stats.pendingEmailCount} 个可复制）
+                      </label>
+                      {stats.pendingMissingEmailCount > 0 && (
+                        <span className="warn-inline">
+                          另有 {stats.pendingMissingEmailCount} 人缺企业邮箱
+                        </span>
                       )}
                     </div>
+                    <textarea
+                      id="pending-emails-box"
+                      ref={unreadEmailRef}
+                      className="compact-email-output"
+                      readOnly
+                      value={report.pendingEmailText}
+                      placeholder="待确认成员均未配置企业邮箱，请使用右侧飞书卡片催办。"
+                      spellCheck={false}
+                    />
+                    <div className="copy-row">
+                      <span>空格分隔 · 自动去重</span>
+                      <button
+                        type="button"
+                        className={`button ${copiedKey === 'pending-emails' ? 'success-button' : 'secondary'}`}
+                        disabled={!report.pendingEmails.length}
+                        onClick={() => triggerCopy('pending-emails', report.pendingEmailText, unreadEmailRef)}
+                      >
+                        <Icon icon={copiedKey === 'pending-emails' ? Check : Copy} size={15} />
+                        {copiedKey === 'pending-emails' ? '已复制未确认邮箱' : `复制未确认邮箱 (${stats.pendingEmailCount})`}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="remind-column remind-bot-column">
+                    <div className="field-heading">
+                      <label>飞书机器人定向卡片催办</label>
+                      {task.lastRemindedAt && (
+                        <span className="muted-inline">上次推送：{formatDateTime(task.lastRemindedAt)}</span>
+                      )}
+                    </div>
+                    <p className="bot-desc">
+                      直接通过飞书应用机器人向待确认的在职成员定向推送交互式签收卡片（内置防重复冷却保护）。
+                    </p>
+                    <div className="bot-action-row">
+                      <button
+                        type="button"
+                        className="button primary"
+                        disabled={reminding || task.status !== 'active'}
+                        onClick={handleSendReminders}
+                      >
+                        <Icon icon={reminding ? LoaderCircle : Send} size={15} className={reminding ? 'spin' : ''} />
+                        {reminding ? '正在推送催办卡片…' : `发送飞书催办卡片 (${stats.pendingCount} 人)`}
+                      </button>
+                    </div>
+                    {detail.reminderLogs?.length > 0 && (
+                      <div className="reminder-log-line">
+                        最近记录：{formatDateTime(detail.reminderLogs[0].createdAt)} 由 {detail.reminderLogs[0].triggeredBy} 触发，送达 {detail.reminderLogs[0].sentCount}/{detail.reminderLogs[0].totalTargets} 人
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {copyFallbackMsg && <p className="copy-error" role="alert">{copyFallbackMsg}</p>}
+
+              <div className="ledger-toolbar">
+                <div className="detail-tabs ledger-tabs" role="tablist" onKeyDown={navigateTabs} aria-label="通讯录对账分组">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={ledgerTab === 'pending'}
+                    onClick={() => setLedgerTab('pending')}
+                  >
+                    待确认 <span>{stats.pendingCount}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={ledgerTab === 'confirmed'}
+                    onClick={() => setLedgerTab('confirmed')}
+                  >
+                    已确认 <span>{stats.confirmedCount}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={ledgerTab === 'departments'}
+                    onClick={() => setLedgerTab('departments')}
+                  >
+                    部门进度 <span>{report.departmentBreakdown.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={ledgerTab === 'joined'}
+                    onClick={() => setLedgerTab('joined')}
+                  >
+                    期间新入职 <span>{stats.joinedAfterCount}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={ledgerTab === 'excluded'}
+                    onClick={() => setLedgerTab('excluded')}
+                  >
+                    已剔除 / 范围外 <span>{stats.inactiveCount + stats.outOfScopeCount}</span>
+                  </button>
+                </div>
+                {ledgerTab !== 'departments' && (
+                  <div className="ledger-toolbar-right">
+                    <div className="ledger-search">
+                      <Icon icon={Search} size={15} />
+                      <input
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="筛选姓名、工号或部门"
+                        aria-label="筛选对账人员名单"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="ledger-body">
+                {ledgerTab === 'pending' && (
+                  filterPeople(report.pending).length ? (
                     <div className="ledger-table-wrap">
                       <table className="ledger-table">
                         <thead>
                           <tr>
                             <th>姓名</th>
                             <th>工号</th>
-                            <th>当前部门</th>
+                            <th>部门</th>
                             <th>企业邮箱</th>
+                            <th>状态说明</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {filterPeople(report.joinedAfter).map(person => (
+                          {filterPeople(report.pending).map(person => (
                             <tr key={person.openId}>
                               <td><strong>{person.name}</strong></td>
-                              <td><code>{person.employeeNo || '—'}</code></td>
+                              <td><code>{person.employeeNo || '-'}</code></td>
                               <td>{person.departmentNames}</td>
-                              <td><code>{person.email || '未配置'}</code></td>
+                              <td>
+                                {person.email ? (
+                                  <code>{person.email}</code>
+                                ) : (
+                                  <span className="warn-inline">未配置企业邮箱</span>
+                                )}
+                              </td>
+                              <td>
+                                <span className="status-pill pending-text">
+                                  {person.source === 'joined_after' ? '新入职补纳入 · 待确认' : '在职待确认'}
+                                </span>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                  </>
-                ) : (
-                  <div className="details-clear">
-                    <Icon icon={CheckCheck} />
-                    <span>实时通讯录对比未发现任务发布后的新增入职人员</span>
-                  </div>
-                )
-              )}
+                  ) : (
+                    <div className="details-clear">
+                      <Icon icon={CheckCheck} />
+                      <span>{searchQuery ? '没有匹配的待确认成员' : '当前目标范围内所有在职成员均已完成确认'}</span>
+                    </div>
+                  )
+                )}
 
-              {ledgerTab === 'excluded' && (
-                report.inactive.length || report.outOfScopeConfirmed.length ? (
-                  <div className="ledger-table-wrap">
-                    <table className="ledger-table">
-                      <thead>
-                        <tr>
-                          <th>分类</th>
-                          <th>姓名</th>
-                          <th>工号</th>
-                          <th>部门</th>
-                          <th>说明</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filterPeople(report.inactive).map(person => (
-                          <tr key={`inactive-${person.openId}`}>
-                            <td><span className="status-text muted-text">已自动移出分母</span></td>
-                            <td><strong>{person.name}</strong></td>
-                            <td><code>{person.employeeNo || '—'}</code></td>
-                            <td>{person.departmentNames}</td>
-                            <td>{person.inactiveReason}（不发送催办）</td>
+                {ledgerTab === 'confirmed' && (
+                  filterPeople(report.confirmed).length ? (
+                    <div className="ledger-table-wrap">
+                      <table className="ledger-table">
+                        <thead>
+                          <tr>
+                            <th>姓名</th>
+                            <th>工号</th>
+                            <th>部门</th>
+                            <th>确认时间</th>
+                            <th>认证方式</th>
+                            <th>回执编号</th>
                           </tr>
-                        ))}
-                        {filterPeople(report.outOfScopeConfirmed).map(person => (
-                          <tr key={`out-${person.openId}`}>
-                            <td><span className="status-text ok-text">范围外已确认</span></td>
-                            <td><strong>{person.name}</strong></td>
-                            <td><code>{person.employeeNo || '—'}</code></td>
-                            <td>{person.departmentNames}</td>
-                            <td>确认于 {formatDateTime(person.confirmedAt)}（回执 <code>{person.receiptNo}</code>）</td>
+                        </thead>
+                        <tbody>
+                          {filterPeople(report.confirmed).map(person => (
+                            <tr key={person.openId}>
+                              <td><strong>{person.name}</strong></td>
+                              <td><code>{person.employeeNo || '-'}</code></td>
+                              <td>{person.departmentNames}</td>
+                              <td className="tabular">{formatDateTime(person.confirmedAt)}</td>
+                              <td>
+                                {person.authChannel === 'web_oauth'
+                                  ? '邮件外链 · 飞书网页授权'
+                                  : person.authChannel === 'demo'
+                                    ? '演示环境实名确认'
+                                    : '飞书客户端免登'}
+                              </td>
+                              <td><code>{person.receiptNo}</code></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="no-matches">尚无已确认记录。</p>
+                  )
+                )}
+
+                {ledgerTab === 'departments' && (
+                  report.departmentBreakdown.length ? (
+                    <div className="ledger-table-wrap">
+                      <table className="ledger-table">
+                        <thead>
+                          <tr>
+                            <th>部门</th>
+                            <th>应确认在职</th>
+                            <th>已确认</th>
+                            <th>待确认</th>
+                            <th>部门完成率</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="no-matches">没有因离职剔除或范围外确认的记录。</p>
-                )
-              )}
+                        </thead>
+                        <tbody>
+                          {report.departmentBreakdown.map(dept => (
+                            <tr key={dept.department}>
+                              <td><strong>{dept.department}</strong></td>
+                              <td className="tabular">{dept.total} 人</td>
+                              <td className="tabular">{dept.confirmed} 人</td>
+                              <td className="tabular">{dept.pending} 人</td>
+                              <td className="tabular">
+                                <div className="dept-progress-cell">
+                                  <svg className="dept-meter-svg" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+                                    <rect
+                                      className="beam-seg-emerald"
+                                      x="0"
+                                      y="0"
+                                      width={Math.max(0, Math.min(100, dept.ratePercent))}
+                                      height="6"
+                                    />
+                                  </svg>
+                                  <strong>{dept.ratePercent}%</strong>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="no-matches">暂无部门维度统计数据。</p>
+                  )
+                )}
+
+                {ledgerTab === 'joined' && (
+                  report.joinedAfter.length ? (
+                    <>
+                      <div className="joiner-callout">
+                        <span>
+                          以下 <strong>{report.joinedAfter.length}</strong> 位在职成员在任务创建时尚未在快照内（属于发布后新入职或转入目标部门），默认未计入原分母。你可将其纳入本次任务并补发通知：
+                        </span>
+                        {task.status === 'active' && (
+                          <button
+                            type="button"
+                            className="button primary"
+                            disabled={includingJoiners}
+                            onClick={handleIncludeJoiners}
+                          >
+                            <Icon icon={includingJoiners ? LoaderCircle : UserPlus} size={15} className={includingJoiners ? 'spin' : ''} />
+                            全部纳入本次任务快照
+                          </button>
+                        )}
+                      </div>
+                      <div className="ledger-table-wrap">
+                        <table className="ledger-table">
+                          <thead>
+                            <tr>
+                              <th>姓名</th>
+                              <th>工号</th>
+                              <th>当前部门</th>
+                              <th>企业邮箱</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filterPeople(report.joinedAfter).map(person => (
+                              <tr key={person.openId}>
+                                <td><strong>{person.name}</strong></td>
+                                <td><code>{person.employeeNo || '-'}</code></td>
+                                <td>{person.departmentNames}</td>
+                                <td><code>{person.email || '未配置'}</code></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="details-clear">
+                      <Icon icon={CheckCheck} />
+                      <span>实时通讯录对比未发现任务发布后的新增入职人员</span>
+                    </div>
+                  )
+                )}
+
+                {ledgerTab === 'excluded' && (
+                  report.inactive.length || report.outOfScopeConfirmed.length ? (
+                    <div className="ledger-table-wrap">
+                      <table className="ledger-table">
+                        <thead>
+                          <tr>
+                            <th>分类</th>
+                            <th>姓名</th>
+                            <th>工号</th>
+                            <th>部门</th>
+                            <th>说明</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filterPeople(report.inactive).map(person => (
+                            <tr key={`inactive-${person.openId}`}>
+                              <td><span className="status-pill muted-text">已自动移出分母</span></td>
+                              <td><strong>{person.name}</strong></td>
+                              <td><code>{person.employeeNo || '-'}</code></td>
+                              <td>{person.departmentNames}</td>
+                              <td>{person.inactiveReason}（不发送催办）</td>
+                            </tr>
+                          ))}
+                          {filterPeople(report.outOfScopeConfirmed).map(person => (
+                            <tr key={`out-${person.openId}`}>
+                              <td><span className="status-pill ok-text">范围外已确认</span></td>
+                              <td><strong>{person.name}</strong></td>
+                              <td><code>{person.employeeNo || '-'}</code></td>
+                              <td>{person.departmentNames}</td>
+                              <td>确认于 {formatDateTime(person.confirmedAt)}（回执 <code>{person.receiptNo}</code>）</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="no-matches">没有因离职剔除或范围外确认的记录。</p>
+                  )
+                )}
+              </div>
+
+              {report.scopeNote && <p className="scope-note">{report.scopeNote}</p>}
             </div>
-
-            {report.scopeNote && <p className="scope-note">{report.scopeNote}</p>}
-          </div>
+          </>
         ) : null}
       </>
     );
   }
 
-  // ─── 任务列表与新建视图 ──────────────────────────────────────────────────────
-  const parsedDraftNumbers = parseNumbers(numbersText);
+  // ─── 新建分发任务视图 ────────────────────────────────────────────────────────
+  if (mode === 'new') {
+    const parsedDraftNumbers = parseNumbers(numbersText);
 
-  return (
-    <>
-      <div className="page-heading">
-        <div>
-          <h1>重要文件签收确认</h1>
-        </div>
-        <button
-          type="button"
-          className="button primary"
-          disabled={!ready}
-          onClick={() => { setShowCreateForm(v => !v); setError(''); }}
-        >
-          <Icon icon={showCreateForm ? X : FilePlus2} size={16} />
-          {showCreateForm ? '收起' : '新建任务'}
-        </button>
-      </div>
-
-      {error && (
-        <div className="notice error-notice" role="alert">
-          <Icon icon={CircleAlert} />
-          <span>{error}</span>
-          <button type="button" className="icon-button" onClick={() => setError('')} aria-label="关闭错误提示">
-            <Icon icon={X} size={16} />
+    return (
+      <>
+        <div className="detail-Backbar">
+          <button
+            type="button"
+            className="text-button back-link"
+            onClick={() => {
+              setError('');
+              setBanner('');
+              onNavigate('/ops/tasks');
+            }}
+          >
+            <Icon icon={ArrowLeft} size={15} />
+            返回分发任务列表
           </button>
         </div>
-      )}
 
-      {banner && (
-        <div className="notice success-notice" role="status">
-          <Icon icon={CheckCheck} />
-          <span>{banner}</span>
-          <button type="button" className="icon-button" onClick={() => setBanner('')} aria-label="关闭提示">
-            <Icon icon={X} size={16} />
-          </button>
-        </div>
-      )}
+        {error && (
+          <div className="notice error-notice" role="alert">
+            <Icon icon={CircleAlert} />
+            <span>{error}</span>
+            <button type="button" className="icon-button" onClick={() => setError('')} aria-label="关闭错误提示">
+              <Icon icon={X} size={16} />
+            </button>
+          </div>
+        )}
 
-      {showCreateForm && (
-        <form className="surface-box create-task-form" onSubmit={handleCreateTask}>
+        <form className="surface-box optical-surface create-task-form" onSubmit={handleCreateTask}>
           <div className="section-heading">
-            <h2>新建任务</h2>
+            <h2>新建实名确认任务</h2>
             {demo && (
               <button type="button" className="text-button" onClick={fillDemoTaskTemplate}>
                 填入制度通知示例
@@ -969,6 +1027,7 @@ export function TasksView({
                 className="text-input"
                 required
                 maxLength={160}
+                placeholder="例如：《2026 年度信息安全与保密制度》确认"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
               />
@@ -977,7 +1036,7 @@ export function TasksView({
               <label className="form-label" htmlFor="task-version">文件版本号</label>
               <input
                 id="task-version"
-                className="text-input"
+                className="text-input mono-input"
                 required
                 maxLength={32}
                 placeholder="v1.0"
@@ -988,12 +1047,13 @@ export function TasksView({
           </div>
 
           <div className="form-field">
-            <label className="form-label" htmlFor="task-summary">说明</label>
+            <label className="form-label" htmlFor="task-summary">必读说明与确认要求</label>
             <textarea
               id="task-summary"
               rows={4}
               required
               maxLength={8000}
+              placeholder="简要说明本次制度或通知的核心要点与签署要求，员工在确认前将完整阅读此段内容。"
               value={summary}
               onChange={e => setSummary(e.target.value)}
             />
@@ -1001,7 +1061,7 @@ export function TasksView({
 
           <div className="form-grid-two">
             <div>
-              <label className="form-label" htmlFor="task-doc-url">文档链接</label>
+              <label className="form-label" htmlFor="task-doc-url">在线文档链接（选填）</label>
               <input
                 id="task-doc-url"
                 className="text-input"
@@ -1012,7 +1072,7 @@ export function TasksView({
               />
             </div>
             <div>
-              <label className="form-label" htmlFor="task-deadline">截止日期</label>
+              <label className="form-label" htmlFor="task-deadline">确认截止日期（选填）</label>
               <input
                 id="task-deadline"
                 className="text-input"
@@ -1025,7 +1085,7 @@ export function TasksView({
 
           <div className="audience-section">
             <div className="field-heading">
-              <label>发送对象</label>
+              <label>应确认受众快照范围</label>
             </div>
             <div className="mode-tabs compact-tabs" role="tablist" onKeyDown={navigateTabs} aria-label="受众范围类型">
               <button
@@ -1065,9 +1125,9 @@ export function TasksView({
                   disabled={picking}
                   onClick={chooseScopeContacts}
                 >
-                  <Icon icon={picking ? LoaderCircle : Users} className={picking ? 'spin' : ''} />
+                  <Icon icon={picking ? LoaderCircle : Users} size={16} className={picking ? 'spin' : ''} />
                   <span>从通讯录选择</span>
-                  <Icon icon={ChevronRight} />
+                  <Icon icon={ChevronRight} size={16} />
                 </button>
                 {(selected.departments.length > 0 || selected.users.length > 0) && (
                   <div className="chips scope-chips">
@@ -1118,7 +1178,7 @@ export function TasksView({
                   onChange={e => setNumbersText(e.target.value)}
                   spellCheck={false}
                 />
-                <span className="field-hint">{parsedDraftNumbers.length} 个工号</span>
+                <span className="field-hint">已识别 {parsedDraftNumbers.length} 个不重复工号</span>
               </div>
             )}
 
@@ -1135,18 +1195,127 @@ export function TasksView({
           </div>
 
           <div className="form-actions-right">
-            <button type="button" className="button ghost-button" onClick={() => setShowCreateForm(false)}>
+            <button
+              type="button"
+              className="button ghost-button"
+              onClick={() => {
+                setError('');
+                onNavigate('/ops/tasks');
+              }}
+            >
               取消
             </button>
             <button type="submit" className="button primary" disabled={creating}>
               <Icon icon={creating ? LoaderCircle : FileCheck2} size={16} className={creating ? 'spin' : ''} />
-              {creating ? '正在创建…' : '创建任务'}
+              {creating ? '正在创建…' : '创建任务并固化快照'}
             </button>
           </div>
         </form>
+
+        {picker && (
+          <DemoPicker
+            contacts={bootstrap.demoContacts || []}
+            departments={bootstrap.demoDepartments || []}
+            selected={selected}
+            onClose={() => setPicker(false)}
+            onConfirm={next => {
+              setSelected(next);
+              setPicker(false);
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
+  // ─── 任务列表视图 ────────────────────────────────────────────────────────────
+  const activeCount = tasks.filter(item => item.status === 'active').length;
+  const totalSnapshot = tasks.reduce((sum, item) => sum + (item.snapshotCount || 0), 0);
+  const totalConfirmed = tasks.reduce((sum, item) => sum + (item.confirmedInScopeCount || 0), 0);
+  const overallBeamWidth = totalSnapshot > 0 ? Math.round((1000 * totalConfirmed) / totalSnapshot) : 0;
+
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <h1>重要文件签收确认</h1>
+          <p>固化发布瞬间的在职名单快照，结合实时飞书通讯录自动剔除离职账号并支持双通道精准催办。</p>
+        </div>
+        <button
+          type="button"
+          className="button primary"
+          disabled={!ready}
+          onClick={() => {
+            setError('');
+            setBanner('');
+            onNavigate('/ops/tasks/new');
+          }}
+        >
+          <Icon icon={FilePlus2} size={16} />
+          新建任务
+        </button>
+      </div>
+
+      {error && (
+        <div className="notice error-notice" role="alert">
+          <Icon icon={CircleAlert} />
+          <span>{error}</span>
+          <button type="button" className="icon-button" onClick={() => setError('')} aria-label="关闭错误提示">
+            <Icon icon={X} size={16} />
+          </button>
+        </div>
       )}
 
-      <section className="surface-box tasks-list-surface" aria-labelledby="tasks-list-heading">
+      {banner && (
+        <div className="notice success-notice" role="status">
+          <Icon icon={CheckCheck} />
+          <span>{banner}</span>
+          <button type="button" className="icon-button" onClick={() => setBanner('')} aria-label="关闭提示">
+            <Icon icon={X} size={16} />
+          </button>
+        </div>
+      )}
+
+      {tasks.length > 0 && (
+        <section className="beam-panel" aria-label="签收任务总览分束条">
+          <div className="beam-metrics beam-metrics--three">
+            <div className="beam-node">
+              <span className="beam-node-value">{tasks.length}</span>
+              <span className="beam-node-label">累计分发任务</span>
+            </div>
+            <div className="beam-node">
+              <span className="beam-node-value beam-node-value--cobalt">{activeCount}</span>
+              <span className="beam-node-label">正在收集确认</span>
+            </div>
+            <div className="beam-node">
+              <span className="beam-node-value beam-node-value--emerald">
+                {totalConfirmed} / {totalSnapshot}
+              </span>
+              <span className="beam-node-label">快照累计实名签收人次</span>
+            </div>
+          </div>
+          <div className="beam-track" aria-hidden="true">
+            <svg className="beam-svg" viewBox="0 0 1000 6" preserveAspectRatio="none">
+              <rect className="beam-seg-emerald" x="0" y="0" width={overallBeamWidth} height="6" />
+              <rect
+                className="beam-seg-cobalt"
+                x={overallBeamWidth}
+                y="0"
+                width={Math.max(0, 1000 - overallBeamWidth)}
+                height="6"
+                opacity="0.22"
+              />
+            </svg>
+            <div className="beam-scale">
+              <span>0%</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="surface-box optical-surface tasks-list-surface" aria-labelledby="tasks-list-heading">
         <div className="section-heading">
           <h2 id="tasks-list-heading">
             任务列表
@@ -1165,11 +1334,15 @@ export function TasksView({
         {loadingList && !tasks.length ? (
           <div className="loading-box">
             <Icon icon={LoaderCircle} size={24} className="spin" />
-            <span>正在读取…</span>
+            <span>正在读取任务列表…</span>
           </div>
         ) : tasks.length === 0 ? (
           <div className="result-empty compact-empty">
-            <h3>还没有任务</h3>
+            <div className="empty-symbol">
+              <Icon icon={FileCheck2} size={24} />
+            </div>
+            <h3>还没有签收确认任务</h3>
+            <p>点击右上角「新建任务」或从「邮箱提取」页面带入受众，即可生成专属实名确认短链。</p>
           </div>
         ) : (
           <div className="task-rows">
@@ -1195,16 +1368,13 @@ export function TasksView({
                     </div>
                     <div className="task-row-meta">
                       <span>范围：{scopeLabel(item.scopeType)}</span>
-                      <span>·</span>
-                      <span className="tabular">
-                        快照进度：<strong>{item.confirmedInScopeCount} / {item.snapshotCount}</strong> 人（{rate}%）
+                      <span className="task-mini-meter tabular">
+                        <svg className="task-mini-svg" viewBox="0 0 100 5" preserveAspectRatio="none" aria-hidden="true">
+                          <rect className="beam-seg-emerald" x="0" y="0" width={Math.max(0, Math.min(100, rate))} height="5" />
+                        </svg>
+                        <span>快照进度：<strong>{item.confirmedInScopeCount} / {item.snapshotCount}</strong> 人（{rate}%）</span>
                       </span>
-                      {item.deadlineAt && (
-                        <>
-                          <span>·</span>
-                          <span>截止：{item.deadlineAt}</span>
-                        </>
-                      )}
+                      {item.deadlineAt && <span>截止：{item.deadlineAt}</span>}
                     </div>
                   </div>
                   <div className="task-row-actions">
@@ -1221,7 +1391,7 @@ export function TasksView({
                       className="button primary"
                       onClick={() => onNavigate(`/ops/tasks/${item.slug}`)}
                     >
-                      查看
+                      查看对账
                       <Icon icon={ChevronRight} size={15} />
                     </button>
                     <button
@@ -1240,19 +1410,6 @@ export function TasksView({
           </div>
         )}
       </section>
-
-      {picker && (
-        <DemoPicker
-          contacts={bootstrap.demoContacts || []}
-          departments={bootstrap.demoDepartments || []}
-          selected={selected}
-          onClose={() => setPicker(false)}
-          onConfirm={next => {
-            setSelected(next);
-            setPicker(false);
-          }}
-        />
-      )}
     </>
   );
 }

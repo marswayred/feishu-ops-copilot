@@ -1,74 +1,693 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-20T11:07:06Z",
-  "title": "Design System: 飞书邮箱助手",
+  "generatedAt": "2026-11-27T17:58:00+08:00",
+  "title": "Design System: 飞书运营助手",
   "extensions": {
     "colorMeta": {
-      "navy": { "role": "secondary", "displayName": "深海蓝页头" },
-      "primary": { "role": "primary", "displayName": "办公操作蓝" },
-      "page": { "role": "neutral", "displayName": "蓝灰页面底色" },
-      "focus": { "role": "primary", "displayName": "可见焦点蓝" }
+      "bg-canvas": {
+        "role": "neutral",
+        "displayName": "微冷铝银底板 (Cool Aluminum Canvas)",
+        "canonical": "#eef2f7",
+        "tonalRamp": [
+          "oklch(18% 0.007 253.9)",
+          "oklch(29% 0.01 253.9)",
+          "oklch(40% 0.012 253.9)",
+          "oklch(52% 0.013 253.9)",
+          "oklch(64% 0.011 253.9)",
+          "oklch(76% 0.008 253.9)",
+          "oklch(87% 0.004 253.9)",
+          "oklch(96% 0.002 253.9)"
+        ]
+      },
+      "bg-surface": {
+        "role": "neutral",
+        "displayName": "净白光学层板 (Pure Optical Surface)",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(18% 0 0)",
+          "oklch(29% 0 0)",
+          "oklch(40% 0 0)",
+          "oklch(52% 0 0)",
+          "oklch(64% 0 0)",
+          "oklch(76% 0 0)",
+          "oklch(87% 0 0)",
+          "oklch(96% 0 0)"
+        ]
+      },
+      "bg-subtle": {
+        "role": "neutral",
+        "displayName": "微凹拉丝底 (Subtle Recessed Well)",
+        "canonical": "#f6f8fb",
+        "tonalRamp": [
+          "oklch(18% 0.004 258.3)",
+          "oklch(29% 0.006 258.3)",
+          "oklch(40% 0.007 258.3)",
+          "oklch(52% 0.007 258.3)",
+          "oklch(64% 0.006 258.3)",
+          "oklch(76% 0.004 258.3)",
+          "oklch(87% 0.003 258.3)",
+          "oklch(96% 0.001 258.3)"
+        ]
+      },
+      "bg-inset": {
+        "role": "neutral",
+        "displayName": "内嵌轨道槽 (Inset Track)",
+        "canonical": "#edf1f7",
+        "tonalRamp": [
+          "oklch(18% 0.008 258.3)",
+          "oklch(29% 0.011 258.3)",
+          "oklch(40% 0.014 258.3)",
+          "oklch(52% 0.015 258.3)",
+          "oklch(64% 0.013 258.3)",
+          "oklch(76% 0.009 258.3)",
+          "oklch(87% 0.005 258.3)",
+          "oklch(96% 0.002 258.3)"
+        ]
+      },
+      "bg-rail": {
+        "role": "secondary",
+        "displayName": "深炭黑导轨 (Carbon Rail)",
+        "canonical": "#111827",
+        "tonalRamp": [
+          "oklch(18% 0.028 264.7)",
+          "oklch(29% 0.04 264.7)",
+          "oklch(40% 0.048 264.7)",
+          "oklch(52% 0.051 264.7)",
+          "oklch(64% 0.045 264.7)",
+          "oklch(76% 0.032 264.7)",
+          "oklch(87% 0.018 264.7)",
+          "oklch(96% 0.007 264.7)"
+        ]
+      },
+      "bg-rail-elevated": {
+        "role": "secondary",
+        "displayName": "炭黑抬升层 (Carbon Rail Elevated)",
+        "canonical": "#182234",
+        "tonalRamp": [
+          "oklch(18% 0.033 261.7)",
+          "oklch(29% 0.046 261.7)",
+          "oklch(40% 0.057 261.7)",
+          "oklch(52% 0.06 261.7)",
+          "oklch(64% 0.052 261.7)",
+          "oklch(76% 0.037 261.7)",
+          "oklch(87% 0.021 261.7)",
+          "oklch(96% 0.008 261.7)"
+        ]
+      },
+      "bg-rail-active": {
+        "role": "secondary",
+        "displayName": "炭黑激活槽 (Carbon Rail Active)",
+        "canonical": "#1e2b42",
+        "tonalRamp": [
+          "oklch(18% 0.025 261.4)",
+          "oklch(29% 0.036 261.4)",
+          "oklch(40% 0.044 261.4)",
+          "oklch(52% 0.046 261.4)",
+          "oklch(64% 0.041 261.4)",
+          "oklch(76% 0.029 261.4)",
+          "oklch(87% 0.016 261.4)",
+          "oklch(96% 0.006 261.4)"
+        ]
+      },
+      "rail-border": {
+        "role": "secondary",
+        "displayName": "导轨发丝边 (Rail Border)",
+        "canonical": "#243247",
+        "tonalRamp": [
+          "oklch(18% 0.023 258.3)",
+          "oklch(29% 0.033 258.3)",
+          "oklch(40% 0.04 258.3)",
+          "oklch(52% 0.042 258.3)",
+          "oklch(64% 0.037 258.3)",
+          "oklch(76% 0.026 258.3)",
+          "oklch(87% 0.015 258.3)",
+          "oklch(96% 0.006 258.3)"
+        ]
+      },
+      "rail-ink": {
+        "role": "secondary",
+        "displayName": "导轨亮白字 (Rail Ink)",
+        "canonical": "#f8fafc",
+        "tonalRamp": [
+          "oklch(18% 0.003 247.9)",
+          "oklch(29% 0.004 247.9)",
+          "oklch(40% 0.005 247.9)",
+          "oklch(52% 0.005 247.9)",
+          "oklch(64% 0.005 247.9)",
+          "oklch(76% 0.003 247.9)",
+          "oklch(87% 0.002 247.9)",
+          "oklch(96% 0.001 247.9)"
+        ]
+      },
+      "rail-muted": {
+        "role": "secondary",
+        "displayName": "导轨静默灰 (Rail Muted)",
+        "canonical": "#94a3b8",
+        "tonalRamp": [
+          "oklch(18% 0.031 256.8)",
+          "oklch(29% 0.044 256.8)",
+          "oklch(40% 0.053 256.8)",
+          "oklch(52% 0.056 256.8)",
+          "oklch(64% 0.049 256.8)",
+          "oklch(76% 0.035 256.8)",
+          "oklch(87% 0.02 256.8)",
+          "oklch(96% 0.008 256.8)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "深板岩主墨色 (Primary Slate Ink)",
+        "canonical": "#0f172a",
+        "tonalRamp": [
+          "oklch(18% 0.035 265.8)",
+          "oklch(29% 0.05 265.8)",
+          "oklch(40% 0.061 265.8)",
+          "oklch(52% 0.064 265.8)",
+          "oklch(64% 0.056 265.8)",
+          "oklch(76% 0.04 265.8)",
+          "oklch(87% 0.022 265.8)",
+          "oklch(96% 0.009 265.8)"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "次级板岩灰 (Secondary Slate)",
+        "canonical": "#475569",
+        "tonalRamp": [
+          "oklch(18% 0.033 257.3)",
+          "oklch(29% 0.047 257.3)",
+          "oklch(40% 0.057 257.3)",
+          "oklch(52% 0.06 257.3)",
+          "oklch(64% 0.053 257.3)",
+          "oklch(76% 0.037 257.3)",
+          "oklch(87% 0.021 257.3)",
+          "oklch(96% 0.008 257.3)"
+        ]
+      },
+      "ink-placeholder": {
+        "role": "neutral",
+        "displayName": "校准占位灰 (Calibrated Placeholder)",
+        "canonical": "#5b6b82",
+        "tonalRamp": [
+          "oklch(18% 0.023 257.4)",
+          "oklch(29% 0.032 257.4)",
+          "oklch(40% 0.039 257.4)",
+          "oklch(52% 0.041 257.4)",
+          "oklch(64% 0.036 257.4)",
+          "oklch(76% 0.026 257.4)",
+          "oklch(87% 0.014 257.4)",
+          "oklch(96% 0.006 257.4)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "标准发丝边 (Hairline Border)",
+        "canonical": "#d5dfec",
+        "tonalRamp": [
+          "oklch(18% 0.018 254.9)",
+          "oklch(29% 0.026 254.9)",
+          "oklch(40% 0.032 254.9)",
+          "oklch(52% 0.033 254.9)",
+          "oklch(64% 0.029 254.9)",
+          "oklch(76% 0.021 254.9)",
+          "oklch(87% 0.012 254.9)",
+          "oklch(96% 0.005 254.9)"
+        ]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "强化控件描边 (Control Strong Border)",
+        "canonical": "#b6c5d8",
+        "tonalRamp": [
+          "oklch(18% 0.028 254.3)",
+          "oklch(29% 0.039 254.3)",
+          "oklch(40% 0.048 254.3)",
+          "oklch(52% 0.05 254.3)",
+          "oklch(64% 0.044 254.3)",
+          "oklch(76% 0.031 254.3)",
+          "oklch(87% 0.018 254.3)",
+          "oklch(96% 0.007 254.3)"
+        ]
+      },
+      "border-subtle": {
+        "role": "neutral",
+        "displayName": "微弱行分割线 (Row Subtle Divider)",
+        "canonical": "#e6ecf4",
+        "tonalRamp": [
+          "oklch(18% 0.011 255.5)",
+          "oklch(29% 0.016 255.5)",
+          "oklch(40% 0.019 255.5)",
+          "oklch(52% 0.02 255.5)",
+          "oklch(64% 0.018 255.5)",
+          "oklch(76% 0.012 255.5)",
+          "oklch(87% 0.007 255.5)",
+          "oklch(96% 0.003 255.5)"
+        ]
+      },
+      "cobalt": {
+        "role": "primary",
+        "displayName": "激光钴蓝 (Laser Cobalt)",
+        "canonical": "#1249d6",
+        "tonalRamp": [
+          "oklch(18% 0.122 263.6)",
+          "oklch(29% 0.173 263.6)",
+          "oklch(40% 0.211 263.6)",
+          "oklch(52% 0.222 263.6)",
+          "oklch(64% 0.195 263.6)",
+          "oklch(76% 0.138 263.6)",
+          "oklch(87% 0.078 263.6)",
+          "oklch(96% 0.031 263.6)"
+        ]
+      },
+      "cobalt-hover": {
+        "role": "primary",
+        "displayName": "深钴悬停 (Cobalt Hover)",
+        "canonical": "#0e3cb5",
+        "tonalRamp": [
+          "oklch(18% 0.108 263.8)",
+          "oklch(29% 0.153 263.8)",
+          "oklch(40% 0.187 263.8)",
+          "oklch(52% 0.196 263.8)",
+          "oklch(64% 0.173 263.8)",
+          "oklch(76% 0.122 263.8)",
+          "oklch(87% 0.069 263.8)",
+          "oklch(96% 0.027 263.8)"
+        ]
+      },
+      "cobalt-tint": {
+        "role": "primary",
+        "displayName": "极性浅钴底 (Cobalt Tint)",
+        "canonical": "#edf3ff",
+        "tonalRamp": [
+          "oklch(18% 0.015 264.5)",
+          "oklch(29% 0.022 264.5)",
+          "oklch(40% 0.026 264.5)",
+          "oklch(52% 0.028 264.5)",
+          "oklch(64% 0.024 264.5)",
+          "oklch(76% 0.017 264.5)",
+          "oklch(87% 0.01 264.5)",
+          "oklch(96% 0.004 264.5)"
+        ]
+      },
+      "cobalt-border": {
+        "role": "primary",
+        "displayName": "浅钴描边 (Cobalt Hairline)",
+        "canonical": "#bfd2fc",
+        "tonalRamp": [
+          "oklch(18% 0.034 265.9)",
+          "oklch(29% 0.048 265.9)",
+          "oklch(40% 0.059 265.9)",
+          "oklch(52% 0.062 265.9)",
+          "oklch(64% 0.055 265.9)",
+          "oklch(76% 0.039 265.9)",
+          "oklch(87% 0.022 265.9)",
+          "oklch(96% 0.009 265.9)"
+        ]
+      },
+      "cobalt-ink": {
+        "role": "primary",
+        "displayName": "钴墨正文 (Cobalt Ink)",
+        "canonical": "#103cb3",
+        "tonalRamp": [
+          "oklch(18% 0.106 264)",
+          "oklch(29% 0.151 264)",
+          "oklch(40% 0.184 264)",
+          "oklch(52% 0.194 264)",
+          "oklch(64% 0.17 264)",
+          "oklch(76% 0.12 264)",
+          "oklch(87% 0.068 264)",
+          "oklch(96% 0.027 264)"
+        ]
+      },
+      "emerald": {
+        "role": "tertiary",
+        "displayName": "核准青绿 (Verified Emerald)",
+        "canonical": "#066a43",
+        "tonalRamp": [
+          "oklch(18% 0.057 159.1)",
+          "oklch(29% 0.081 159.1)",
+          "oklch(40% 0.099 159.1)",
+          "oklch(52% 0.104 159.1)",
+          "oklch(64% 0.092 159.1)",
+          "oklch(76% 0.065 159.1)",
+          "oklch(87% 0.036 159.1)",
+          "oklch(96% 0.015 159.1)"
+        ]
+      },
+      "emerald-bg": {
+        "role": "tertiary",
+        "displayName": "青绿浅底 (Emerald Tint)",
+        "canonical": "#eaf8f1",
+        "tonalRamp": [
+          "oklch(18% 0.015 164.7)",
+          "oklch(29% 0.022 164.7)",
+          "oklch(40% 0.026 164.7)",
+          "oklch(52% 0.028 164.7)",
+          "oklch(64% 0.024 164.7)",
+          "oklch(76% 0.017 164.7)",
+          "oklch(87% 0.01 164.7)",
+          "oklch(96% 0.004 164.7)"
+        ]
+      },
+      "emerald-border": {
+        "role": "tertiary",
+        "displayName": "青绿描边 (Emerald Hairline)",
+        "canonical": "#b3e3cc",
+        "tonalRamp": [
+          "oklch(18% 0.032 164.3)",
+          "oklch(29% 0.046 164.3)",
+          "oklch(40% 0.056 164.3)",
+          "oklch(52% 0.059 164.3)",
+          "oklch(64% 0.052 164.3)",
+          "oklch(76% 0.037 164.3)",
+          "oklch(87% 0.021 164.3)",
+          "oklch(96% 0.008 164.3)"
+        ]
+      },
+      "amber": {
+        "role": "tertiary",
+        "displayName": "异动琥珀 (Anomaly Amber)",
+        "canonical": "#8a4206",
+        "tonalRamp": [
+          "oklch(18% 0.064 51.7)",
+          "oklch(29% 0.091 51.7)",
+          "oklch(40% 0.111 51.7)",
+          "oklch(52% 0.116 51.7)",
+          "oklch(64% 0.103 51.7)",
+          "oklch(76% 0.072 51.7)",
+          "oklch(87% 0.041 51.7)",
+          "oklch(96% 0.016 51.7)"
+        ]
+      },
+      "amber-bg": {
+        "role": "tertiary",
+        "displayName": "琥珀浅底 (Amber Tint)",
+        "canonical": "#fff6e8",
+        "tonalRamp": [
+          "oklch(18% 0.018 79.1)",
+          "oklch(29% 0.026 79.1)",
+          "oklch(40% 0.032 79.1)",
+          "oklch(52% 0.033 79.1)",
+          "oklch(64% 0.029 79.1)",
+          "oklch(76% 0.021 79.1)",
+          "oklch(87% 0.012 79.1)",
+          "oklch(96% 0.005 79.1)"
+        ]
+      },
+      "amber-border": {
+        "role": "tertiary",
+        "displayName": "琥珀描边 (Amber Hairline)",
+        "canonical": "#f7d69c",
+        "tonalRamp": [
+          "oklch(18% 0.046 81.3)",
+          "oklch(29% 0.065 81.3)",
+          "oklch(40% 0.079 81.3)",
+          "oklch(52% 0.083 81.3)",
+          "oklch(64% 0.073 81.3)",
+          "oklch(76% 0.051 81.3)",
+          "oklch(87% 0.029 81.3)",
+          "oklch(96% 0.012 81.3)"
+        ]
+      },
+      "crimson": {
+        "role": "tertiary",
+        "displayName": "阻断绯红 (Alert Crimson)",
+        "canonical": "#a61b29",
+        "tonalRamp": [
+          "oklch(18% 0.095 22.7)",
+          "oklch(29% 0.134 22.7)",
+          "oklch(40% 0.164 22.7)",
+          "oklch(52% 0.172 22.7)",
+          "oklch(64% 0.152 22.7)",
+          "oklch(76% 0.107 22.7)",
+          "oklch(87% 0.06 22.7)",
+          "oklch(96% 0.024 22.7)"
+        ]
+      },
+      "crimson-bg": {
+        "role": "tertiary",
+        "displayName": "绯红浅底 (Crimson Tint)",
+        "canonical": "#fdf0f1",
+        "tonalRamp": [
+          "oklch(18% 0.012 12)",
+          "oklch(29% 0.018 12)",
+          "oklch(40% 0.021 12)",
+          "oklch(52% 0.023 12)",
+          "oklch(64% 0.02 12)",
+          "oklch(76% 0.014 12)",
+          "oklch(87% 0.008 12)",
+          "oklch(96% 0.003 12)"
+        ]
+      },
+      "crimson-border": {
+        "role": "tertiary",
+        "displayName": "绯红描边 (Crimson Hairline)",
+        "canonical": "#f1bcc2",
+        "tonalRamp": [
+          "oklch(18% 0.034 10.9)",
+          "oklch(29% 0.048 10.9)",
+          "oklch(40% 0.058 10.9)",
+          "oklch(52% 0.062 10.9)",
+          "oklch(64% 0.054 10.9)",
+          "oklch(76% 0.038 10.9)",
+          "oklch(87% 0.022 10.9)",
+          "oklch(96% 0.009 10.9)"
+        ]
+      },
+      "focus-ring": {
+        "role": "primary",
+        "displayName": "光学焦点环 (Focus Ring)",
+        "canonical": "#2563eb",
+        "tonalRamp": [
+          "oklch(18% 0.118 262.9)",
+          "oklch(29% 0.168 262.9)",
+          "oklch(40% 0.204 262.9)",
+          "oklch(52% 0.215 262.9)",
+          "oklch(64% 0.189 262.9)",
+          "oklch(76% 0.133 262.9)",
+          "oklch(87% 0.075 262.9)",
+          "oklch(96% 0.03 262.9)"
+        ]
+      }
     },
     "typographyMeta": {
-      "headline": { "displayName": "任务标题", "purpose": "说明当前工具的主要任务，不作为装饰性大标题。" },
-      "data": { "displayName": "工号与邮箱", "purpose": "仅用于可复制的数据、工号和格式示例。" }
+      "display": {
+        "displayName": "页面与单据主标题 (Page & Sheet Display)",
+        "purpose": "用于管理端模块标题 h1（1.5rem）与员工实名确认单据标题（1.4375rem），固定字阶不随视口夸张放大。"
+      },
+      "headline": {
+        "displayName": "工作舱分节标题 (Bay Headline)",
+        "purpose": "用于双舱工作面标题 h2、表单分节头部与通讯录选择器模态框标题。"
+      },
+      "title": {
+        "displayName": "名册行与品牌标题 (Row & Brand Title)",
+        "purpose": "用于任务与项目名册主行标题、空状态小标题、回执标题及左侧导轨品牌标识。"
+      },
+      "body": {
+        "displayName": "操作正文与必读说明 (Operational Body)",
+        "purpose": "用于全局默认文本、表单输入值、对账表格正文与 68ch 行宽约束的文件必读说明。"
+      },
+      "label": {
+        "displayName": "元数据与字段标签 (Field & Ledger Label)",
+        "purpose": "用于表单标签、辅助说明、表格列头、状态徽章与光学分束节点说明。"
+      },
+      "mono-metric": {
+        "displayName": "光学分束等宽读数 (Optical Beam Metric)",
+        "purpose": "专用于光学分束比例条顶部主统计读数，强制启用 tabular-nums 保证数字跳变零抖动。"
+      },
+      "mono-data": {
+        "displayName": "工号与对账数据轨 (Monospace Ledger Data)",
+        "purpose": "用于员工工号、空格分隔企业邮箱、确认短链、令牌前缀、时间戳与电子回执编号。"
+      }
     },
     "shadows": [
-      { "name": "picker", "value": "0 16px 56px #102c4933", "purpose": "仅用于演示选择器浮层；主工作面无阴影。" }
+      {
+        "name": "dialog-modal",
+        "value": "0 20px 48px rgba(15, 23, 42, 0.22)",
+        "purpose": "全站唯一外部投影，专用于原生 <dialog> 通讯录成员/部门选择器浮层（配 rgba(15, 23, 42, 0.48) 遮罩且 border: 0）。"
+      },
+      {
+        "name": "beam-active-inset",
+        "value": "inset 0 -2px 0 #1249d6",
+        "purpose": "光学分束比例条内选中筛选节点的底部内嵌极性指示线，不产生外部高度抬升。"
+      }
     ],
     "motion": [
-      { "name": "button-colors", "value": "background-color 140ms ease-out, color 140ms ease-out", "purpose": "按钮状态变化。" },
-      { "name": "loading", "value": "spin 1s linear infinite", "purpose": "明确表示加载；reduced-motion 下关闭。" }
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "全局按钮、输入框、分段极性与光学分束条共享的高阻尼收敛曲线。"
+      },
+      {
+        "name": "control-transition",
+        "value": "background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "按钮、输入控件与导轨导航项的悬停及激活色彩响应。"
+      },
+      {
+        "name": "row-hover",
+        "value": "background-color 140ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "任务、项目与对账明细行的悬停底色过渡。"
+      },
+      {
+        "name": "beam-geometry",
+        "value": "width 240ms cubic-bezier(0.16, 1, 0.3, 1), x 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "光学分束 SVG 比例条段的宽度与横向起点平滑推进（prefers-reduced-motion: reduce 下全局关闭）。"
+      },
+      {
+        "name": "spin",
+        "value": "spin 1s linear infinite",
+        "purpose": "通讯录同步、飞书免登与对账加载中的图标旋转动画。"
+      }
     ],
     "breakpoints": [
-      { "name": "compact", "value": "1000px" },
-      { "name": "stacked", "value": "740px" }
+      { "name": "lg", "value": "1040px" },
+      { "name": "md", "value": "880px" },
+      { "name": "sm", "value": "740px" },
+      { "name": "xs", "value": "560px" }
     ]
   },
   "components": [
     {
-      "name": "主操作按钮", "kind": "button", "refersTo": "button-primary",
-      "description": "蓝色主操作，复制成功时由产品状态切换为成功反馈。",
-      "html": "<button class=\"ds-primary\">查询企业邮箱</button>",
-      "css": ".ds-primary{background:var(--blue,#245fc7);color:#fff;border:0;border-radius:6px;padding:10px 16px;min-height:39px;font:550 13px -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;cursor:pointer;transition:background-color 140ms ease-out,color 140ms ease-out}.ds-primary:hover{background:var(--blue-hover,#174da9)}.ds-primary:focus-visible{outline:3px solid #4d7dc6;outline-offset:3px}.ds-primary:disabled{opacity:.48;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+      "name": "激光钴蓝主按钮 (Primary Button)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "页面核心推进操作按钮，采用激光钴蓝实底配内联双侧图标，悬停加深至深钴蓝。",
+      "html": "<button type=\"button\" class=\"ds-btn-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><span>查询企业邮箱</span><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></button>",
+      "css": ".ds-btn-primary { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 14px; border: 1px solid transparent; border-radius: var(--radius-control, 8px); background: var(--cobalt, #1249d6); color: #ffffff; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); font-size: var(--text-sm, 0.8125rem); font-weight: 550; white-space: nowrap; cursor: pointer; transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary:hover:not(:disabled) { background: var(--cobalt-hover, #0e3cb5); } .ds-btn-primary:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.46; cursor: not-allowed; }"
     },
     {
-      "name": "工号输入框", "kind": "input", "refersTo": "input",
-      "description": "保留前导零的多行输入，明确占位文字与键盘焦点。",
-      "html": "<label class=\"ds-input-label\">工号列表<textarea class=\"ds-input\" placeholder=\"一行一个工号\"></textarea></label>",
-      "css": ".ds-input-label{display:block;color:#1f3447;font:14px -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif}.ds-input{display:block;width:calc(100% - 34px);min-height:100px;margin-top:8px;padding:14px 16px;border:1px solid #becddb;border-radius:7px;background:#fff;color:#213e5b;font:14px/1.9 'SFMono-Regular',Consolas,monospace;resize:vertical;caret-color:var(--blue,#245fc7)}.ds-input::placeholder{color:#586d83;opacity:1}.ds-input:focus-visible{outline:3px solid #4d7dc6;outline-offset:3px;border-color:var(--blue,#245fc7)}"
+      "name": "浅钴次级联动按钮 (Secondary Button)",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "用于跨模块受众带入、复制确认短链与版本重签等高优先级次级动作。",
+      "html": "<button type=\"button\" class=\"ds-btn-secondary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"m3 15 2 2 4-4\"/></svg><span>以此范围新建确认任务</span></button>",
+      "css": ".ds-btn-secondary { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 14px; border: 1px solid var(--cobalt-border, #bfd2fc); border-radius: var(--radius-control, 8px); background: var(--cobalt-tint, #edf3ff); color: var(--cobalt-ink, #103cb3); font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); font-size: var(--text-sm, 0.8125rem); font-weight: 550; white-space: nowrap; cursor: pointer; transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-secondary:hover:not(:disabled) { background: #dfeaff; } .ds-btn-secondary:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: 2px; }"
     },
     {
-      "name": "查询方式标签", "kind": "nav", "refersTo": "tabs",
-      "description": "标准标签样式，蓝色文字和底线同时指示选中。",
-      "html": "<nav class=\"ds-tabs\" aria-label=\"查询方式示例\"><button class=\"ds-tab ds-selected\">按工号查询</button><button class=\"ds-tab\">选择成员 / 部门</button></nav>",
-      "css": ".ds-tabs{display:flex;gap:24px;border-bottom:1px solid var(--line,#dce4ec)}.ds-tab{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted,#607185);font:14px -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;padding:0 0 13px;cursor:pointer}.ds-tab.ds-selected{color:var(--blue,#245fc7);border-bottom-color:var(--blue,#245fc7);font-weight:600}.ds-tab:hover{color:var(--blue,#245fc7)}.ds-tab:focus-visible{outline:3px solid #4d7dc6;outline-offset:3px}"
+      "name": "净白发丝边辅助按钮 (Ghost Button)",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "用于刷新通讯录缓存、导出 CSV 台账、预览员工单据与表单取消操作。",
+      "html": "<button type=\"button\" class=\"ds-btn-ghost\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\"/><path d=\"M21 3v5h-5\"/><path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\"/><path d=\"M8 16H3v5\"/></svg><span>刷新对账</span></button>",
+      "css": ".ds-btn-ghost { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 14px; border: 1px solid var(--border-strong, #b6c5d8); border-radius: var(--radius-control, 8px); background: var(--bg-surface, #ffffff); color: var(--ink, #0f172a); font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); font-size: var(--text-sm, 0.8125rem); font-weight: 550; white-space: nowrap; cursor: pointer; transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-ghost:hover:not(:disabled) { background: var(--bg-subtle, #f6f8fb); border-color: #94a7bf; } .ds-btn-ghost:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: 2px; }"
     },
     {
-      "name": "已选成员标签", "kind": "chip", "refersTo": "chip",
-      "description": "紧凑标签携带明确的移除操作。",
-      "html": "<span class=\"ds-chip\">演示成员<button aria-label=\"移除演示成员\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" aria-hidden=\"true\"><path d=\"M18 6 6 18M6 6l12 12\"/></svg></button></span>",
-      "css": ".ds-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 10px;background:#f0f3f7;color:#40576e;border-radius:5px;font:12px -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif}.ds-chip button{display:inline-flex;border:0;background:none;padding:4px;border-radius:3px;color:#63788e;cursor:pointer}.ds-chip button:hover{background:#d8e1ec;color:#163958}.ds-chip button:focus-visible{outline:3px solid #4d7dc6;outline-offset:3px}"
+      "name": "绯红描边危险按钮 (Danger Button)",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "用于删除签收任务、移除项目记录或销毁 API 令牌等不可逆破坏性动作。",
+      "html": "<button type=\"button\" class=\"ds-btn-danger\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 6h18\"/><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"/><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"/></svg><span>删除</span></button>",
+      "css": ".ds-btn-danger { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 14px; border: 1px solid var(--crimson-border, #f1bcc2); border-radius: var(--radius-control, 8px); background: var(--bg-surface, #ffffff); color: var(--crimson, #a61b29); font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); font-size: var(--text-sm, 0.8125rem); font-weight: 550; white-space: nowrap; cursor: pointer; transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-danger:hover:not(:disabled) { background: var(--crimson-bg, #fdf0f1); border-color: #e2959e; } .ds-btn-danger:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: 2px; }"
     },
     {
-      "name": "工作区容器", "kind": "card", "refersTo": "workspace",
-      "description": "白色工作面依靠描边而非阴影建立层级。",
-      "html": "<section class=\"ds-workspace\"><h2>邮箱集合</h2><p>去重 · 空格分隔</p></section>",
-      "css": ".ds-workspace{background:#fff;border:1px solid var(--line,#dce4ec);border-radius:var(--radius,12px);padding:26px 28px;color:#1f3447;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif}.ds-workspace h2{font-size:17px;font-weight:650;line-height:1.5;margin:0}.ds-workspace p{font-size:12px;color:var(--muted,#607185);margin:12px 0 0}"
+      "name": "表单与等宽工号输入域 (Form & Monospace Field)",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "强化描边表单输入控件，支持常规单行文本与微凹浅槽等宽工号批量粘贴。",
+      "html": "<div class=\"ds-field-group\"><label class=\"ds-field-label\" for=\"ds-demo-version\">文件版本号</label><p class=\"ds-field-hint\">升级版本后将保留历史回执并重新统计新版签收率。</p><input id=\"ds-demo-version\" class=\"ds-text-input\" type=\"text\" value=\"v2.0\" placeholder=\"例如 v1.0\" /></div>",
+      "css": ".ds-field-group { max-width: 340px; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); } .ds-field-label { display: block; font-size: var(--text-sm, 0.8125rem); font-weight: 600; color: var(--ink, #0f172a); } .ds-field-hint { margin: 4px 0 10px; font-size: var(--text-xs, 0.75rem); line-height: 1.65; color: var(--ink-secondary, #475569); } .ds-text-input { display: block; width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--border-strong, #b6c5d8); border-radius: var(--radius-control, 8px); background: var(--bg-surface, #ffffff); color: var(--ink, #0f172a); font-family: var(--font-mono, 'SFMono-Regular', ui-monospace, monospace); font-size: var(--text-base, 0.875rem); caret-color: var(--cobalt, #1249d6); transition: border-color 150ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-text-input::placeholder { color: var(--ink-placeholder, #5b6b82); opacity: 1; } .ds-text-input:hover:not(:disabled) { border-color: #8fa3bd; } .ds-text-input:focus { border-color: var(--cobalt, #1249d6); outline: none; } .ds-text-input:focus-visible { border-color: var(--cobalt, #1249d6); outline: 2px solid var(--focus-ring, #2563eb); outline-offset: 2px; }"
     },
     {
-      "name": "结果汇总条", "kind": "custom", "refersTo": "result-summary",
-      "description": "按输入、人员、邮箱顺序汇总真实数量。以下数字仅为演示。",
-      "html": "<div class=\"ds-summary\" aria-label=\"演示结果汇总\"><span>输入 <strong>4</strong> 项</span><span aria-hidden=\"true\">›</span><span>匹配 <strong>4</strong> 人</span><span aria-hidden=\"true\">›</span><span class=\"ds-final\"><strong>3</strong> 个邮箱</span></div>",
-      "css": ".ds-summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;background:#edf4f3;color:#5a6c80;border-radius:6px;font:12px -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif}.ds-summary strong{font-weight:650;font-variant-numeric:tabular-nums}.ds-final{color:var(--green,#22664e)}"
+      "name": "深炭黑结构导轨导航 (Carbon Structural Rail)",
+      "kind": "nav",
+      "refersTo": "rail-link",
+      "description": "管理工作台左侧立式深炭黑结构导航轨，激活模块配备深蓝底槽与右侧亮蓝极性圆点。",
+      "html": "<aside class=\"ds-carbon-rail\" aria-label=\"运营工作台导航示例\"><div class=\"ds-rail-brand\"><span class=\"ds-rail-mark\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z\"/><path d=\"m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65\"/><path d=\"m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65\"/></svg></span><span>飞书运营助手</span></div><nav class=\"ds-rail-nav\"><button type=\"button\" class=\"ds-rail-link ds-active\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"/><path d=\"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7\"/></svg><span>邮箱提取</span><span class=\"ds-rail-dot\" aria-hidden=\"true\"></span></button><button type=\"button\" class=\"ds-rail-link\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"m3 15 2 2 4-4\"/></svg><span>分发确认</span><span class=\"ds-rail-dot\" aria-hidden=\"true\"></span></button></nav></aside>",
+      "css": ".ds-carbon-rail { width: 244px; padding: 16px 14px; border-radius: var(--radius-surface, 12px); background: var(--bg-rail, #111827); border: 1px solid var(--rail-border, #243247); color: var(--rail-ink, #f8fafc); display: flex; flex-direction: column; gap: 16px; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); } .ds-rail-brand { display: inline-flex; align-items: center; gap: 11px; padding: 4px 6px; font-size: var(--text-md, 1rem); font-weight: 650; letter-spacing: -0.02em; } .ds-rail-mark { position: relative; overflow: hidden; width: 32px; height: 32px; border-radius: 8px; background: var(--bg-rail-elevated, #182234); border: 1px solid #30425c; color: #60a5fa; display: inline-flex; align-items: center; justify-content: center; } .ds-rail-mark::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #3b82f6; } .ds-rail-nav { display: flex; flex-direction: column; gap: 4px; } .ds-rail-link { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid transparent; border-radius: var(--radius-control, 8px); background: transparent; color: var(--rail-muted, #94a3b8); font-size: var(--text-base, 0.875rem); font-weight: 500; text-align: left; cursor: pointer; transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-rail-link:hover { background: var(--bg-rail-elevated, #182234); color: var(--rail-ink, #f8fafc); } .ds-rail-link.ds-active { background: var(--bg-rail-active, #1e2b42); border-color: #2e4263; color: #ffffff; font-weight: 600; } .ds-rail-link:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: 2px; } .ds-rail-dot { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: transparent; } .ds-rail-link.ds-active .ds-rail-dot { background: #60a5fa; }"
+    },
+    {
+      "name": "极性分段模式切换器 (Polar Segmented Tabs)",
+      "kind": "nav",
+      "refersTo": "mode-tab-active",
+      "description": "置于内嵌轨道槽中的工作舱模式切换器，选中态浮现纯白层板、强化描边与激光钴蓝极性。",
+      "html": "<div class=\"ds-mode-tabs\" role=\"tablist\" aria-label=\"查询方式切换\"><button type=\"button\" role=\"tab\" aria-selected=\"true\" class=\"ds-mode-tab\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/></svg><span>按工号查询</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" class=\"ds-mode-tab\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg><span>选择成员 / 部门</span></button></div>",
+      "css": ".ds-mode-tabs { display: inline-flex; align-items: center; gap: 4px; padding: 3px; background: var(--bg-inset, #edf1f7); border: 1px solid var(--border, #d5dfec); border-radius: var(--radius-control, 8px); font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); } .ds-mode-tab { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px 13px; border: 1px solid transparent; border-radius: var(--radius-tag, 6px); background: transparent; color: var(--ink-secondary, #475569); font-size: var(--text-sm, 0.8125rem); font-weight: 500; white-space: nowrap; cursor: pointer; transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-mode-tab:hover { color: var(--ink, #0f172a); } .ds-mode-tab[aria-selected='true'] { background: var(--bg-surface, #ffffff); border-color: var(--border-strong, #b6c5d8); color: var(--cobalt, #1249d6); font-weight: 600; } .ds-mode-tab:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: 2px; }"
+    },
+    {
+      "name": "通讯录成员与部门标签 (Contact & Department Chips)",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "区分部门层级（浅钴底）与独立成员（净白强化描边）的可移除受众标签组。",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip ds-chip-dept\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z\"/></svg><span>安全合规部</span><button type=\"button\" aria-label=\"移除部门 安全合规部\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/></svg></button></span><span class=\"ds-chip\"><span>林晓 E1001</span><button type=\"button\" aria-label=\"移除成员 林晓\"><svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/></svg></button></span></div>",
+      "css": ".ds-chips { display: flex; flex-wrap: wrap; gap: 7px; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); } .ds-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border: 1px solid var(--border-strong, #b6c5d8); border-radius: var(--radius-tag, 6px); background: var(--bg-surface, #ffffff); color: var(--ink, #0f172a); font-size: var(--text-xs, 0.75rem); } .ds-chip-dept { background: var(--cobalt-tint, #edf3ff); border-color: var(--cobalt-border, #bfd2fc); color: var(--cobalt-ink, #103cb3); } .ds-chip button { display: inline-flex; border: 0; background: transparent; padding: 2px; border-radius: 4px; color: var(--ink-secondary, #475569); cursor: pointer; transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-chip button:hover { background: var(--bg-inset, #edf1f7); color: var(--ink, #0f172a); } .ds-chip button:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: 2px; }"
+    },
+    {
+      "name": "阳极氧化铝光学顶轨层板 (Optical Surface Bay)",
+      "kind": "card",
+      "refersTo": "surface-bay",
+      "description": "零外部阴影的纯白 1px 发丝边工作舱，通过顶部 2px 实色光学导轨宣告当前任务极性。",
+      "html": "<section class=\"ds-surface-bay\"><div class=\"ds-bay-head\"><h2>邮箱集合 <span class=\"ds-count-pill\">18</span></h2><span class=\"ds-bay-note\">去重 · 空格分隔</span></div><p class=\"ds-bay-desc\">仅输出在职成员有效企业邮箱，自动剔除离职与冻结账号。</p></section>",
+      "css": ".ds-surface-bay { position: relative; overflow: hidden; padding: 22px 26px; background: var(--bg-surface, #ffffff); border: 1px solid var(--border, #d5dfec); border-radius: var(--radius-surface, 12px); color: var(--ink, #0f172a); font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); } .ds-surface-bay::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--cobalt, #1249d6); } .ds-bay-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; } .ds-bay-head h2 { margin: 0; display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-lg, 1.0625rem); font-weight: 650; letter-spacing: -0.015em; } .ds-count-pill { padding: 1px 7px; border-radius: var(--radius-tag, 6px); background: var(--cobalt-tint, #edf3ff); border: 1px solid var(--cobalt-border, #bfd2fc); color: var(--cobalt-ink, #103cb3); font-family: var(--font-mono, 'SFMono-Regular', monospace); font-variant-numeric: tabular-nums; font-size: var(--text-xs, 0.75rem); font-weight: 600; } .ds-bay-note { font-size: var(--text-xs, 0.75rem); color: var(--ink-secondary, #475569); } .ds-bay-desc { margin: 0; font-size: var(--text-sm, 0.8125rem); line-height: 1.65; color: var(--ink-secondary, #475569); }"
+    },
+    {
+      "name": "光学分束比例条 (Optical Split-Stream Bar)",
+      "kind": "custom",
+      "refersTo": "beam-panel",
+      "description": "全站签名组件：上部等宽制表读数节点支持点击筛选明细，下部 1000×6 零内联样式 SVG 分束轨实时映射核准与异常比例。",
+      "html": "<section class=\"ds-beam-panel\" aria-label=\"通讯录邮箱解析分束状态演示\"><div class=\"ds-beam-metrics\"><div class=\"ds-beam-node\"><span class=\"ds-beam-val\">5</span><span class=\"ds-beam-lbl\">输入源项数</span></div><div class=\"ds-beam-node\"><span class=\"ds-beam-val ds-val-cobalt\">4</span><span class=\"ds-beam-lbl\">在职成员匹配</span></div><button type=\"button\" class=\"ds-beam-node ds-beam-active\"><span class=\"ds-beam-val ds-val-emerald\">3</span><span class=\"ds-beam-lbl\">有效企业邮箱</span></button><button type=\"button\" class=\"ds-beam-node\"><span class=\"ds-beam-val ds-val-amber\">2</span><span class=\"ds-beam-lbl\">异常与剔除项</span></button></div><div class=\"ds-beam-track\" aria-hidden=\"true\"><svg class=\"ds-beam-svg\" viewBox=\"0 0 1000 6\" preserveAspectRatio=\"none\"><rect class=\"ds-seg-emerald\" x=\"0\" y=\"0\" width=\"596\" height=\"6\"/><rect class=\"ds-seg-amber\" x=\"602\" y=\"0\" width=\"398\" height=\"6\"/></svg><div class=\"ds-beam-scale\"><span>0%</span><span>50%</span><span>100%</span></div></div></section>",
+      "css": ".ds-beam-panel { overflow: hidden; background: var(--bg-surface, #ffffff); border: 1px solid var(--border, #d5dfec); border-radius: var(--radius-surface, 12px); font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif); } .ds-beam-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); } .ds-beam-node { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 13px 16px; border: 0; border-right: 1px solid var(--border, #d5dfec); background: transparent; text-align: left; color: var(--ink, #0f172a); transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-beam-node:last-child { border-right: 0; } button.ds-beam-node { cursor: pointer; } button.ds-beam-node:hover { background: var(--bg-subtle, #f6f8fb); } button.ds-beam-node:focus-visible { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: -2px; } .ds-beam-active, button.ds-beam-node.ds-beam-active:hover { background: var(--cobalt-tint, #edf3ff); box-shadow: inset 0 -2px 0 var(--cobalt, #1249d6); } .ds-beam-val { font-family: var(--font-mono, 'SFMono-Regular', ui-monospace, monospace); font-variant-numeric: tabular-nums; font-size: var(--text-xl, 1.25rem); font-weight: 650; line-height: 1.25; color: var(--ink, #0f172a); } .ds-val-cobalt { color: var(--cobalt, #1249d6); } .ds-val-emerald { color: var(--emerald, #066a43); } .ds-val-amber { color: var(--amber, #8a4206); } .ds-beam-lbl { font-size: var(--text-xs, 0.75rem); color: var(--ink-secondary, #475569); } .ds-beam-track { padding: 9px 18px 8px; border-top: 1px solid var(--border, #d5dfec); background: var(--bg-subtle, #f6f8fb); } .ds-beam-svg { display: block; width: 100%; height: 6px; background: var(--bg-inset, #edf1f7); border-radius: 2px; overflow: hidden; } .ds-seg-emerald { fill: var(--emerald, #066a43); } .ds-seg-amber { fill: #d97706; } .ds-beam-scale { display: flex; justify-content: space-between; margin-top: 5px; font-family: var(--font-mono, 'SFMono-Regular', ui-monospace, monospace); font-variant-numeric: tabular-nums; font-size: var(--text-xs, 0.75rem); line-height: 1; color: var(--ink-secondary, #475569); }"
     }
   ],
   "narrative": {
-    "northStar": "通讯录索引",
-    "overview": "面向办公场景的轻量工具界面：深蓝页头建立应用识别，浅底与白色工作区承载输入和结果。视觉表达服从标准表单、标签切换、清单和明确反馈，不以装饰取代任务信息。",
-    "keyCharacteristics": ["浅底、深蓝页头与蓝色主操作。", "紧凑清单、清晰分隔与单一结果出口。", "中文系统字体负责阅读，等宽字体仅用于工号和邮箱数据。", "成功、待确认和错误同时使用颜色与文字表达。"],
-    "rules": [],
-    "dos": ["Do 保持浅底深蓝办公方向和标准表单操作习惯。", "Do 用清晰文字区分演示、授权、查询、异常和复制状态。", "Do 将工号、邮箱数据与普通说明文字分开排版。", "Do 在更改颜色后检查真实相邻背景上的文本和焦点对比度。"],
-    "donts": ["Don't 以个人邮箱或虚构结果掩盖企业邮箱缺失。", "Don't 将数据状态仅编码为颜色。", "Don't 为普通工作区叠加装饰性阴影或嵌套卡片。", "Don't 让长邮箱或移动端说明文字撑出容器。"]
+    "northStar": "阳极氧化铝光学分束舱 (Anodized Aluminum & Optical Split-Stream Bay)",
+    "overview": "飞书运营助手以精密硬件级「阳极氧化铝光学分束工作台」重塑企业通讯录邮箱提取、重要文件实名签收与增量对账。微冷铝银底板承载纯白 `1px` 发丝边层板，立式深炭黑结构导轨收拢管理模块与环境身份上下文；激活工作舱顶部的 `2px` 实色光学聚焦轨与「光学分束比例条」精确呈现输入源、在职匹配、有效输出以及已签收、待确认、离职剔除的实时分流，让每一次发信圈人与合规审计都具备仪器级确定感。\n\n系统在空间架构上严格执行管理工作台与员工确认单据的双壳层物理隔离：管理端采用左侧立式导轨配高密度双舱工作面或对账台账，服务批量工号解析、快照锁定与双通道催办；全体员工从企业邮件或飞书卡片点击确认短链时，进入剥离全部后台导航干扰的净白光学核验单据，首屏直达文件版本、本人飞书实名通行条、必读说明与电子回执凭证。\n\n工程与视觉表达同步服从严格的 `Content-Security-Policy`（`default-src 'self'`、`style-src 'self'`），零外部字体或样式 CDN、零内联 `style` 属性，所有比例刻度均由固定坐标系 SVG 几何属性与高阻尼曲线驱动。本系统明确拒绝松散的传统后台圆角卡片堆叠、装饰性悬浮阴影、霓虹光晕与大数字看板模板。",
+    "keyCharacteristics": [
+      "微冷铝银底板（`#eef2f7`）与纯白 `1px` 发丝边（`#d5dfec`）层板构成零阴影工作面，立式深炭黑结构导轨（`#111827`）锚定管理模块与环境身份。",
+      "签名组件「光学分束比例条」以等宽制表读数配合 `1000×6` 零内联样式 SVG 分束轨，直观映射有效输出、已确认与异常待办比例。",
+      "激活工作舱与单据通过舱顶 `2px` 实色光学导轨切换极性（默认激光钴蓝 `#1249d6`，就绪或已签收切换为核准青绿 `#066a43`）。",
+      "管理端双舱/台账壳层（`256px` 导轨 + `1220px` 画布）与员工端零干扰核验单据壳层（`748px` 居中单据）按路由与权限彻底分离。",
+      "中文系统无衬线固定 `rem` 字阶负责阅读，所有工号、企业邮箱、确认短链、令牌前缀与回执编号强制归入等宽制表数字轨。"
+    ],
+    "rules": [
+      {
+        "name": "The Optical Polarity Rule",
+        "body": "激光钴蓝（`#1249d6`）专司主操作按钮、默认激活舱顶 `2px` 聚焦轨、选中分段极性与链接；一旦工作舱完成邮箱解析或员工完成实名签收，舱顶导轨与主反馈立即移交核准青绿（`#066a43`），不让蓝色在完成态继续抢占视觉焦点。",
+        "section": "colors"
+      },
+      {
+        "name": "The Tri-Modal Signal Rule",
+        "body": "成功签收（`#066a43`）、待确认/异动（`#8a4206`）与错误阻断（`#a61b29`）严禁仅靠颜色传达，必须同时绑定明确中文状态词与语义图标或 `6px` 极性圆点，且文本在各自浅底（`#eaf8f1`、`#fff6e8`、`#fdf0f1`）上保持 ≥ 4.5:1 对比度。",
+        "section": "colors"
+      },
+      {
+        "name": "The Carbon-Only Rail Rule",
+        "body": "深炭黑底色族（`#111827`、`#182234`、`#1e2b42`）仅限于管理端侧边导航轨与员工单据页顶栏使用，主画布内禁止出现深色卡片或黑底浮层，确保核验与对账界面的净白通透。",
+        "section": "colors"
+      },
+      {
+        "name": "The Fixed-Rem Operate Scale Rule",
+        "body": "全站采用固定 `rem` 操作字阶（`0.75rem`–`1.5rem`），禁用流式 `clamp()` 营销巨字，保证飞书工作台内嵌视口、桌面宽屏与手机邮件外链视口下的信息密度恒定可控。",
+        "section": "typography"
+      },
+      {
+        "name": "The Monospace Ledger Rail Rule",
+        "body": "所有员工工号、企业邮箱、确认短链、API 令牌前缀与电子回执编号一律使用等宽字体（`--font-mono`），且全部计数、完成率与时间戳强制启用 `font-variant-numeric: tabular-nums` 纵向对齐。",
+        "section": "typography"
+      },
+      {
+        "name": "The Zero-Shadow Workspace Rule",
+        "body": "主画布上的所有工作舱、光学分束面板、对账表格与确认单据在静止及悬停态均保持零外部阴影，层级仅由冷铝底板（`#eef2f7`）、净白层板（`#ffffff`）、内凹浅槽（`#f6f8fb` / `#edf1f7`）与 `1px` 发丝边建立；外部阴影仅授予原生 `<dialog>` 模态选择器。",
+        "section": "elevation"
+      },
+      {
+        "name": "The Active Top-Rail Focus Rule",
+        "body": "面板焦点通过容器顶部 `2px` 实色光学导轨（`#1249d6` 或 `#066a43`）与分束节点底部 `inset 0 -2px 0 #1249d6` 内嵌线表达，禁止叠加模糊发光（glow）或悬浮抬升位移。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do 严格维持双壳层边界：管理路由（`/ops/*`）使用左侧 `256px` 深炭黑结构导轨与 `1220px` 画布，员工路由（`/ack/:slug`、`/my/acks`）使用无侧栏的 `748px` 净白单据壳层。",
+      "Do 用舱顶 `2px` 实色光学导轨（`.optical-surface` 默认 `#1249d6`，完成/已签收态 `#066a43`）标记当前主焦点容器，并在同屏避免无关次级容器重复点亮顶轨。",
+      "Do 将所有工号、企业邮箱、确认短链、令牌前缀与回执编号放入 `--font-mono` 等宽字体轨，并为一切统计数字、比例与时间戳开启 `tabular-nums`。",
+      "Do 通过固定 `viewBox` 的 SVG `x`/`width` 属性驱动光学分束比例条与部门进度条，严格遵守零内联 `style` 属性与零外部资源引用的 CSP 约束。",
+      "Do 确保所有语义状态（成功 `#066a43`、待办/异常 `#8a4206`、错误 `#a61b29`）同时具备中文文本、图标或极性点，并保持键盘 `:focus-visible` 的 `2px solid #2563eb` 焦点环清晰可见。"
+    ],
+    "donts": [
+      "Don't 为主画布上的工作舱、分束面板、表格或确认单据添加外部 `box-shadow` 投影，浮层阴影仅限原生 `<dialog>` 通讯录选择器使用。",
+      "Don't 在员工确认单据页（`/ack/:slug`）暴露后台管理模块入口、全员通讯录统计或催办控件，确保普通员工阅读签署零干扰。",
+      "Don't 在 JSX 或 SVG 元素上编写内联 `style={{ ... }}` 属性，或引入外部 Google Fonts / CDN 样式表破坏 `style-src 'self'` 安全策略。",
+      "Don't 把双舱工作面拆成带间距的零散悬浮小卡片，也不要在主画布内使用深炭黑背景卡片或大字号流式 `clamp()` 装饰标题。",
+      "Don't 仅凭红/黄/绿颜色变化表达对账或签收结果，也不要在企业邮箱缺失或人员离职时用模糊文案掩盖剔除原因。"
+    ]
   }
 }

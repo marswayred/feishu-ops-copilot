@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  Briefcase,
   CheckCheck,
   ChevronRight,
   CircleAlert,
@@ -9,6 +8,7 @@ import {
   FileCheck2,
   FolderKanban,
   KeyRound,
+  Layers,
   LoaderCircle,
   Lock,
   Mail,
@@ -38,10 +38,16 @@ function parseRoute(pathname) {
   if (clean === '/ops/permissions') return { kind: 'redirect', to: '/ops/admin/permissions' };
   if (clean === '/ops/admin' || clean === '/ops/admin/permissions') return { kind: 'admin', section: 'permissions' };
   if (clean === '/ops/admin/tokens') return { kind: 'admin', section: 'tokens' };
-  if (clean === '/ops/projects') return { kind: 'projects' };
+  if (clean === '/ops/projects') return { kind: 'projects', mode: 'list', projectId: '' };
+  if (clean === '/ops/projects/new') return { kind: 'projects', mode: 'new', projectId: '' };
+  const projectEditMatch = clean.match(/^\/ops\/projects\/([A-Za-z0-9_-]+)\/edit$/);
+  if (projectEditMatch) return { kind: 'projects', mode: 'edit', projectId: projectEditMatch[1] };
+  const projectDetailMatch = clean.match(/^\/ops\/projects\/([A-Za-z0-9_-]+)$/);
+  if (projectDetailMatch) return { kind: 'projects', mode: 'detail', projectId: projectDetailMatch[1] };
+  if (clean === '/ops/tasks/new') return { kind: 'tasks', mode: 'new', slug: '' };
   const taskDetailMatch = clean.match(/^\/ops\/tasks\/([A-Za-z0-9_-]+)$/);
-  if (taskDetailMatch) return { kind: 'tasks', slug: taskDetailMatch[1] };
-  if (clean === '/ops/tasks') return { kind: 'tasks', slug: '' };
+  if (taskDetailMatch) return { kind: 'tasks', mode: 'detail', slug: taskDetailMatch[1] };
+  if (clean === '/ops/tasks') return { kind: 'tasks', mode: 'list', slug: '' };
   return { kind: 'mail' };
 }
 
@@ -128,7 +134,7 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
     setDirBanner('');
     try {
       const res = await api('/api/ops/directory/refresh', {});
-      setDirBanner(`已同步刷新通讯录缓存，当前可见成员共 ${res.userCount} 人。`);
+      setDirBanner(`已同步刷新通讯录缓存，当前可见在职成员共 ${res.userCount} 人。`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -138,13 +144,11 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
 
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <h2>权限管理</h2>
-        </div>
+      <div className="section-heading">
+        <h2>后台角色授权与通讯录缓存</h2>
         <button
           type="button"
-          className="button secondary"
+          className="button ghost-button"
           disabled={refreshingDir}
           onClick={handleRefreshDirectoryCache}
         >
@@ -180,9 +184,9 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
       )}
 
       <div className="workspace permissions-workspace">
-        <section className="input-panel" aria-labelledby="add-operator-heading">
+        <section className="input-panel optical-surface" aria-labelledby="add-operator-heading">
           <div className="section-heading">
-            <h2 id="add-operator-heading">添加成员</h2>
+            <h2 id="add-operator-heading">添加后台协作者</h2>
           </div>
           <form onSubmit={handleAddGrant}>
             <div className="form-field">
@@ -190,6 +194,7 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
               <button type="button" className="choose-button" onClick={() => setPickerOpen(true)}>
                 <Icon icon={UserPlus} size={16} />
                 <span>从通讯录选择</span>
+                <Icon icon={ChevronRight} size={16} />
               </button>
               {picked.length > 0 && (
                 <div className="chips scope-chips">
@@ -209,7 +214,7 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
               )}
             </div>
             <div className="form-field">
-              <label className="form-label" htmlFor="grant-role">角色</label>
+              <label className="form-label" htmlFor="grant-role">角色级别</label>
               <select
                 id="grant-role"
                 className="select-input"
@@ -222,7 +227,7 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
             </div>
             <button type="submit" className="button primary submit-button" disabled={saving || !picked.length}>
               <Icon icon={UserPlus} size={16} />
-              {saving ? '正在添加…' : '加入权限'}
+              {saving ? '正在添加…' : '加入后台权限'}
             </button>
           </form>
           {pickerOpen && (
@@ -239,7 +244,10 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
 
         <section className="result-panel" aria-labelledby="operator-list-heading">
           <div className="section-heading">
-            <h2 id="operator-list-heading">当前后台授权名单</h2>
+            <h2 id="operator-list-heading">
+              当前授权名单
+              {data?.grants && <span className="count-label">{data.grants.length}</span>}
+            </h2>
             <span className="section-note">{data?.rbacStrict ? '角色隔离已生效' : '初始开放设置态'}</span>
           </div>
           {loading ? (
@@ -251,7 +259,7 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
             <>
               {(data?.envAdminOpenIds?.length > 0 || data?.envAdminEmployeeNos?.length > 0) && (
                 <div className="env-admin-note">
-                  环境变量固定管理员：
+                  <span>环境变量固定管理员：</span>
                   {data.envAdminEmployeeNos?.map(no => <code key={no}>{no}</code>)}
                   {data.envAdminOpenIds?.map(id => <code key={id}>{id}</code>)}
                 </div>
@@ -265,7 +273,9 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
                         {grant.employeeNo && <code>{grant.employeeNo}</code>}
                       </div>
                       <div className="grant-row-right">
-                        <span className="badge version-badge">{grant.role === 'admin' ? '管理员' : '运营协作'}</span>
+                        <span className={`badge ${grant.role === 'admin' ? 'status-active' : 'version-badge'}`}>
+                          {grant.role === 'admin' ? '管理员' : '运营协作'}
+                        </span>
                         <button
                           type="button"
                           className="icon-button"
@@ -280,7 +290,8 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
                 </div>
               ) : (
                 <div className="result-empty compact-empty">
-                  <p>当前暂无页面内动态添加的协作者记录。</p>
+                  <h3>暂无动态添加的协作者</h3>
+                  <p>左侧从通讯录选择同事后，即可授予运营工作台访问权限。</p>
                 </div>
               )}
             </>
@@ -298,6 +309,7 @@ function AdminCenterView({ bootstrap, section, onNavigate, onRefreshBootstrap, r
       <div className="page-heading">
         <div>
           <h1>管理中心</h1>
+          <p>配置工作台角色隔离权限、手动同步飞书通讯录缓存，并管理自动化集成 API 令牌。</p>
         </div>
       </div>
       <div className="mode-tabs compact-tabs" role="tablist" aria-label="管理中心子功能">
@@ -384,11 +396,13 @@ function App() {
     window.history.replaceState({}, '', route.to);
     setPathname(route.to);
   }, [route.kind, route.to]);
+
   const demo = bootstrap?.mode === 'demo';
   const authenticated = Boolean(bootstrap?.authenticated);
   const canManageOps = Boolean(bootstrap?.user?.canManageOps);
   const ready = Boolean(bootstrap) && authenticated && canManageOps;
   const isEmployeeSurface = route.kind === 'ack' || route.kind === 'my-acks';
+  const showOpsShell = !isEmployeeSurface && (canManageOps || !authenticated);
   const inFeishuClient = isFeishuClient();
 
   const handleFeishuLogin = useCallback(async ({ silent = false } = {}) => {
@@ -411,7 +425,6 @@ function App() {
     }
   }, [bootstrap, pathname]);
 
-  // 飞书客户端内打开时自动跳转授权。不走 requestAccess，避免 20029（当前页不是回调地址）。
   useEffect(() => {
     if (!bootstrap || demo || authenticated || isEmployeeSurface) return;
     if (!inFeishuClient || autoLoginAttempted.current || authBusy) return;
@@ -440,255 +453,314 @@ function App() {
 
   function handleCreateTaskFromAudience(audience) {
     setDraftAudience(audience);
-    navigate('/ops/tasks');
+    navigate('/ops/tasks/new');
   }
 
+  const brandHref = canManageOps ? '/ops/mail' : '/my/acks';
+
+  const personaSelect = demo && bootstrap?.demoPersonas ? (
+    <label className="persona-switcher">
+      <span className="sr-only">切换演示身份视角</span>
+      <select
+        value={bootstrap.user?.openId || ''}
+        onChange={handleDemoPersonaChange}
+        aria-label="切换演示身份视角"
+      >
+        {bootstrap.demoPersonas.map(persona => (
+          <option key={persona.openId} value={persona.openId}>
+            {persona.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  ) : null;
+
+  const envBadge = (
+    <span className="env-pill">
+      <span className={`env-dot ${bootstrap && !demo ? 'env-dot--live' : ''}`} aria-hidden="true" />
+      {!bootstrap ? '正在连接' : demo ? '演示环境' : '企业应用'}
+    </span>
+  );
+
   return (
-    <>
-      <header className="topbar">
-        <div className="topbar-inner">
+    <div className={showOpsShell ? 'app-shell--ops' : 'app-shell--sheet'}>
+      {showOpsShell ? (
+        <aside className="carbon-rail" aria-label="运营工作台主导航">
           <a
-            className="brand"
-            href={canManageOps ? '/ops/mail' : '/my/acks'}
+            className="rail-brand"
+            href={brandHref}
             onClick={e => {
               e.preventDefault();
-              navigate(canManageOps ? '/ops/mail' : '/my/acks');
+              navigate(brandHref);
             }}
             aria-label="飞书运营助手首页"
           >
-            <span className="brand-icon">
-              <Icon icon={Briefcase} size={20} />
+            <span className="rail-brand-mark">
+              <Icon icon={Layers} size={17} />
             </span>
-            <span>运营助手</span>
+            <span>飞书运营助手</span>
           </a>
 
-          {(canManageOps || (!authenticated && !isEmployeeSurface)) && (
-            <>
-              <span className="topbar-divider" />
-              <nav className="topbar-nav" aria-label="运营助手功能模块">
-                <button
-                  type="button"
-                  className={`topbar-link ${route.kind === 'mail' ? 'active' : ''}`}
-                  onClick={() => navigate('/ops/mail')}
-                >
-                  <Icon icon={Mail} size={16} />
-                  邮箱提取
-                </button>
-                <button
-                  type="button"
-                  className={`topbar-link ${route.kind === 'tasks' ? 'active' : ''}`}
-                  onClick={() => navigate('/ops/tasks')}
-                >
-                  <Icon icon={FileCheck2} size={16} />
-                  分发确认
-                </button>
-                <button
-                  type="button"
-                  className={`topbar-link ${route.kind === 'projects' ? 'active' : ''}`}
-                  onClick={() => navigate('/ops/projects')}
-                >
-                  <Icon icon={FolderKanban} size={16} />
-                  项目清单
-                </button>
-                <button
-                  type="button"
-                  className={`topbar-link ${route.kind === 'admin' ? 'active' : ''}`}
-                  onClick={() => navigate('/ops/admin/permissions')}
-                >
-                  <Icon icon={ShieldCheck} size={16} />
-                  管理中心
-                </button>
-              </nav>
-            </>
-          )}
-
-          <div className="topbar-right">
-            {demo && bootstrap?.demoPersonas && (
-              <label className="persona-switcher">
-                <span className="sr-only">切换演示身份视角</span>
-                <select
-                  value={bootstrap.user?.openId || ''}
-                  onChange={handleDemoPersonaChange}
-                  aria-label="切换演示身份视角"
-                >
-                  {bootstrap.demoPersonas.map(persona => (
-                    <option key={persona.openId} value={persona.openId}>
-                      视角：{persona.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <span className="environment">
-              {!bootstrap ? '正在连接' : demo ? '演示环境' : '企业应用'}
-            </span>
-          </div>
-        </div>
-      </header>
-
-      <main>
-        {demo && (
-          <div className="notice demo-notice">
-            <Icon icon={CircleAlert} />
-            <span>
-              <strong>当前为演示模式</strong> · 组织架构与示例任务均为虚构数据。你可在右上角切换「管理员 / 待确认员工 / 新入职员工」视角完整体验发信取邮箱、点链接签收与通讯录对账。
-            </span>
-          </div>
-        )}
-
-        {globalError && (
-          <div className="notice error-notice" role="alert">
-            <Icon icon={CircleAlert} />
-            <span>{globalError}</span>
-            {!bootstrap && (
-              <button type="button" className="text-button" onClick={refreshBootstrap}>
-                重新连接
-              </button>
-            )}
-            <button type="button" className="icon-button" onClick={() => setGlobalError('')} aria-label="关闭错误提示">
-              <Icon icon={X} size={16} />
+          <nav className="rail-nav" aria-label="运营助手功能模块">
+            <button
+              type="button"
+              className={`rail-link ${route.kind === 'mail' ? 'active' : ''}`}
+              onClick={() => navigate('/ops/mail')}
+            >
+              <Icon icon={Mail} size={17} />
+              <span>邮箱提取</span>
+              <span className="rail-link-dot" aria-hidden="true" />
             </button>
-          </div>
-        )}
-
-        {bootstrap && !demo && authenticated && (
-          <div className="session-line">
-            <Icon icon={CheckCheck} />
-            <span>
-              {bootstrap.user?.name || '飞书成员'}
-              {bootstrap.user?.employeeNo ? `（${bootstrap.user.employeeNo}）` : ''}
-              ，已通过飞书实名认证
-            </span>
-            <button type="button" className="text-button" onClick={() => navigate('/my/acks')}>
-              我的确认回执
+            <button
+              type="button"
+              className={`rail-link ${route.kind === 'tasks' ? 'active' : ''}`}
+              onClick={() => navigate('/ops/tasks')}
+            >
+              <Icon icon={FileCheck2} size={17} />
+              <span>分发确认</span>
+              <span className="rail-link-dot" aria-hidden="true" />
             </button>
-            <button type="button" className="text-button" onClick={handleLogout}>
-              退出
+            <button
+              type="button"
+              className={`rail-link ${route.kind === 'projects' ? 'active' : ''}`}
+              onClick={() => navigate('/ops/projects')}
+            >
+              <Icon icon={FolderKanban} size={17} />
+              <span>项目清单</span>
+              <span className="rail-link-dot" aria-hidden="true" />
             </button>
-          </div>
-        )}
+            <button
+              type="button"
+              className={`rail-link ${route.kind === 'admin' ? 'active' : ''}`}
+              onClick={() => navigate('/ops/admin/permissions')}
+            >
+              <Icon icon={ShieldCheck} size={17} />
+              <span>管理中心</span>
+              <span className="rail-link-dot" aria-hidden="true" />
+            </button>
+          </nav>
 
-        {route.kind === 'ack' ? (
-          <AckView
-            slug={route.slug}
-            bootstrap={bootstrap}
-            onBootstrapRefresh={refreshBootstrap}
-            onNavigate={navigate}
-          />
-        ) : route.kind === 'my-acks' ? (
-          <MyAcksView bootstrap={bootstrap} onNavigate={navigate} />
-        ) : bootstrap && !demo && !authenticated ? (
-          <div className="notice auth-notice">
-            <Icon icon={ShieldCheck} />
-            <span>
-              <strong>
-                {authBusy
-                  ? '正在跳转飞书授权…'
-                  : '先登录飞书，再进入运营助手工作台'}
-              </strong>
-              <br />
-              {inFeishuClient
-                ? '将使用已配置的回调地址完成登录，不会再校验当前页面地址。'
-                : '普通浏览器中将跳转飞书扫码 / 桌面端快捷授权登录。'}
-            </span>
-            {!(authBusy && inFeishuClient) && (
-              <button
-                type="button"
-                className="button primary"
-                onClick={() => handleFeishuLogin()}
-                disabled={authBusy}
-              >
-                {authBusy && <Icon icon={LoaderCircle} className="spin" />}
-                {authBusy ? '正在授权…' : '登录飞书'}
-              </button>
-            )}
-            {authBusy && inFeishuClient && (
-              <span className="auth-busy-line">
-                <Icon icon={LoaderCircle} className="spin" />
-                免登进行中
-              </span>
-            )}
-          </div>
-        ) : bootstrap && authenticated && !canManageOps ? (
-          <div className="ack-container">
-            <div className="surface-box restricted-box">
-              <Icon icon={Lock} size={28} />
-              <h1>当前身份无运营管理工作台权限</h1>
-              <p>
-                你当前登录的账号为 <strong>{bootstrap.user?.name}</strong>
-                {bootstrap.user?.employeeNo ? `（工号 ${bootstrap.user.employeeNo}）` : ''}，属于普通员工视角，可通过邮件中的专属确认链接完成文件实名签收。
-              </p>
-              <div className="openid-self-box">
-                <span>如需开通运营助手管理权限，请将以下标识发给管理员加入后台授权：</span>
-                <div className="openid-copy-line">
-                  <code>{bootstrap.user?.openId}</code>
-                  <button
-                    type="button"
-                    className="button secondary"
-                    onClick={async () => {
-                      const res = await copyTextWithFallback(bootstrap.user?.openId || '');
-                      if (res.ok) {
-                        setOpenIdCopied(true);
-                        setTimeout(() => setOpenIdCopied(false), 2000);
-                      }
-                    }}
-                  >
-                    <Icon icon={Copy} size={14} />
-                    {openIdCopied ? '已复制' : '复制 open_id'}
+          <div className="rail-dock">
+            <div className="rail-env-row">
+              {envBadge}
+            </div>
+            {personaSelect}
+            {bootstrap && !demo && authenticated && (
+              <div className="rail-session">
+                <div className="rail-session-user">
+                  <span>{bootstrap.user?.name || '飞书成员'}</span>
+                  {bootstrap.user?.employeeNo && <code>{bootstrap.user.employeeNo}</code>}
+                </div>
+                <div className="rail-session-links">
+                  <button type="button" className="rail-text-btn" onClick={() => navigate('/my/acks')}>
+                    我的回执
+                  </button>
+                  <button type="button" className="rail-text-btn" onClick={handleLogout}>
+                    退出
                   </button>
                 </div>
               </div>
-              <div className="restricted-actions">
-                <button type="button" className="button primary" onClick={() => navigate('/my/acks')}>
-                  <Icon icon={UserCheck} size={16} />
-                  查看我已确认的文件记录
-                </button>
-                {demo && (
-                  <button
-                    type="button"
-                    className="button secondary"
-                    onClick={() => navigate('/ack/demo-sec-2026')}
-                  >
-                    前往示例制度确认单据页
-                    <Icon icon={ChevronRight} size={15} />
+            )}
+          </div>
+        </aside>
+      ) : (
+        <header className="sheet-topbar">
+          <div className="sheet-topbar-inner">
+            <a
+              className="rail-brand"
+              href={brandHref}
+              onClick={e => {
+                e.preventDefault();
+                navigate(brandHref);
+              }}
+              aria-label="飞书运营助手"
+            >
+              <span className="rail-brand-mark">
+                <Icon icon={Layers} size={17} />
+              </span>
+              <span>飞书运营助手</span>
+            </a>
+
+            <div className="sheet-topbar-right">
+              {personaSelect}
+              {envBadge}
+              {bootstrap && !demo && authenticated && (
+                <>
+                  <button type="button" className="rail-text-btn" onClick={() => navigate('/my/acks')}>
+                    我的确认回执
                   </button>
-                )}
-              </div>
+                  <button type="button" className="rail-text-btn" onClick={handleLogout}>
+                    退出
+                  </button>
+                </>
+              )}
             </div>
           </div>
-        ) : route.kind === 'tasks' ? (
-          <TasksView
-            bootstrap={bootstrap}
-            ready={ready}
-            activeSlug={route.slug}
-            draftAudience={draftAudience}
-            onClearDraftAudience={() => setDraftAudience(null)}
-            onNavigate={navigate}
-            onAuthError={() => setBootstrap(prev => prev && { ...prev, authenticated: false })}
-          />
-        ) : route.kind === 'admin' ? (
-          <AdminCenterView
-            bootstrap={bootstrap}
-            section={route.section}
-            ready={ready}
-            onNavigate={navigate}
-            onRefreshBootstrap={refreshBootstrap}
-          />
-        ) : route.kind === 'projects' ? (
-          <ProjectsView bootstrap={bootstrap} ready={ready} />
-        ) : route.kind === 'redirect' ? (
-          null
-        ) : (
-          <MailView
-            bootstrap={bootstrap}
-            ready={ready}
-            onAuthError={() => setBootstrap(prev => prev && { ...prev, authenticated: false })}
-            onCreateTaskFromAudience={handleCreateTaskFromAudience}
-          />
-        )}
+        </header>
+      )}
 
+      <main className="app-canvas">
+        <div className="canvas-inner">
+          {demo && (
+            <div className="notice demo-notice">
+              <Icon icon={CircleAlert} size={17} />
+              <span>
+                {isEmployeeSurface ? (
+                  <>
+                    <strong>演示模式</strong> · 当前为虚构示例单据，可在顶栏切换员工身份视角体验签收与回执。
+                  </>
+                ) : (
+                  <>
+                    <strong>当前为演示模式</strong> · 组织架构与示例任务均为虚构数据。你可在导航栏切换「管理员 / 待确认员工 / 新入职员工」视角完整体验发信取邮箱、点链接签收与通讯录对账。
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
+          {globalError && (
+            <div className="notice error-notice" role="alert">
+              <Icon icon={CircleAlert} size={17} />
+              <span>{globalError}</span>
+              {!bootstrap && (
+                <button type="button" className="text-button" onClick={refreshBootstrap}>
+                  重新连接
+                </button>
+              )}
+              <button type="button" className="icon-button" onClick={() => setGlobalError('')} aria-label="关闭错误提示">
+                <Icon icon={X} size={16} />
+              </button>
+            </div>
+          )}
+
+          {route.kind === 'ack' ? (
+            <AckView
+              slug={route.slug}
+              bootstrap={bootstrap}
+              onBootstrapRefresh={refreshBootstrap}
+              onNavigate={navigate}
+            />
+          ) : route.kind === 'my-acks' ? (
+            <MyAcksView bootstrap={bootstrap} onNavigate={navigate} />
+          ) : bootstrap && !demo && !authenticated ? (
+            <div className="notice auth-notice">
+              <Icon icon={ShieldCheck} />
+              <span>
+                <strong>
+                  {authBusy
+                    ? '正在跳转飞书授权…'
+                    : '先登录飞书，再进入运营助手工作台'}
+                </strong>
+                <br />
+                {inFeishuClient
+                  ? '将使用已配置的回调地址完成登录，不会再校验当前页面地址。'
+                  : '普通浏览器中将跳转飞书扫码或桌面端快捷授权登录。'}
+              </span>
+              {!(authBusy && inFeishuClient) && (
+                <button
+                  type="button"
+                  className="button primary"
+                  onClick={() => handleFeishuLogin()}
+                  disabled={authBusy}
+                >
+                  {authBusy && <Icon icon={LoaderCircle} className="spin" />}
+                  {authBusy ? '正在授权…' : '登录飞书'}
+                </button>
+              )}
+              {authBusy && inFeishuClient && (
+                <span className="auth-busy-line">
+                  <Icon icon={LoaderCircle} className="spin" />
+                  免登进行中
+                </span>
+              )}
+            </div>
+          ) : bootstrap && authenticated && !canManageOps ? (
+            <div className="ack-container">
+              <div className="surface-box optical-surface restricted-box">
+                <Icon icon={Lock} size={28} />
+                <h1>当前身份无运营管理工作台权限</h1>
+                <p>
+                  你当前登录的账号为 <strong>{bootstrap.user?.name}</strong>
+                  {bootstrap.user?.employeeNo ? `（工号 ${bootstrap.user.employeeNo}）` : ''}，属于普通员工视角，可通过邮件中的专属确认链接完成文件实名签收。
+                </p>
+                <div className="openid-self-box">
+                  <span>如需开通运营助手管理权限，请将以下标识发给管理员加入后台授权：</span>
+                  <div className="openid-copy-line">
+                    <code>{bootstrap.user?.openId}</code>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={async () => {
+                        const res = await copyTextWithFallback(bootstrap.user?.openId || '');
+                        if (res.ok) {
+                          setOpenIdCopied(true);
+                          setTimeout(() => setOpenIdCopied(false), 2000);
+                        }
+                      }}
+                    >
+                      <Icon icon={Copy} size={14} />
+                      {openIdCopied ? '已复制' : '复制 open_id'}
+                    </button>
+                  </div>
+                </div>
+                <div className="restricted-actions">
+                  <button type="button" className="button primary" onClick={() => navigate('/my/acks')}>
+                    <Icon icon={UserCheck} size={16} />
+                    查看我已确认的文件记录
+                  </button>
+                  {demo && (
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => navigate('/ack/demo-sec-2026')}
+                    >
+                      前往示例制度确认单据页
+                      <Icon icon={ChevronRight} size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : route.kind === 'tasks' ? (
+            <TasksView
+              bootstrap={bootstrap}
+              ready={ready}
+              mode={route.mode}
+              activeSlug={route.slug}
+              draftAudience={draftAudience}
+              onClearDraftAudience={() => setDraftAudience(null)}
+              onNavigate={navigate}
+              onAuthError={() => setBootstrap(prev => prev && { ...prev, authenticated: false })}
+            />
+          ) : route.kind === 'admin' ? (
+            <AdminCenterView
+              bootstrap={bootstrap}
+              section={route.section}
+              ready={ready}
+              onNavigate={navigate}
+              onRefreshBootstrap={refreshBootstrap}
+            />
+          ) : route.kind === 'projects' ? (
+            <ProjectsView
+              bootstrap={bootstrap}
+              ready={ready}
+              mode={route.mode}
+              activeProjectId={route.projectId}
+              onNavigate={navigate}
+            />
+          ) : route.kind === 'redirect' ? (
+            null
+          ) : (
+            <MailView
+              bootstrap={bootstrap}
+              ready={ready}
+              onAuthError={() => setBootstrap(prev => prev && { ...prev, authenticated: false })}
+              onCreateTaskFromAudience={handleCreateTaskFromAudience}
+            />
+          )}
+        </div>
       </main>
-    </>
+    </div>
   );
 }
 

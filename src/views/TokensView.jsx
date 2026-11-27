@@ -20,7 +20,7 @@ const EXPIRY_PRESETS = [
 ];
 
 function formatDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -133,10 +133,10 @@ export function TokensView({ ready }) {
   return (
     <>
       <div className="section-heading">
-        <h2>API 令牌</h2>
+        <h2>API 访问令牌管理</h2>
         <button type="button" className="button primary" disabled={!ready} onClick={() => setShowForm(v => !v)}>
           <Icon icon={KeyRound} size={15} />
-          {showForm ? '收起' : '新建令牌'}
+          {showForm ? '收起表单' : '新建令牌'}
         </button>
       </div>
 
@@ -154,7 +154,7 @@ export function TokensView({ ready }) {
         <div className="notice auth-notice" role="status">
           <Icon icon={KeyRound} />
           <span>
-            <strong>令牌只显示这一次，请立即复制保存。</strong>
+            <strong>令牌明文仅显示这一次，请立即复制保存。</strong>
             <code className="mono-data token-plain">{createdToken}</code>
           </span>
           <button type="button" className={`button ${copied ? 'success-button' : 'primary'}`} onClick={handleCopy}>
@@ -168,18 +168,18 @@ export function TokensView({ ready }) {
       )}
 
       {showForm && (
-        <form className="surface-box create-task-form" onSubmit={handleCreate}>
+        <form className="surface-box optical-surface create-task-form" onSubmit={handleCreate}>
           <div className="section-heading">
-            <h2>新建令牌</h2>
+            <h2>签发新 API 令牌</h2>
           </div>
           <div className="form-field">
-            <label className="form-label" htmlFor="token-name">名称</label>
+            <label className="form-label" htmlFor="token-name">令牌用途名称</label>
             <input
               id="token-name"
               className="text-input"
               required
               maxLength={80}
-              placeholder="例如：人事系统同步"
+              placeholder="例如：人事系统名册同步"
               value={name}
               onChange={e => setName(e.target.value)}
             />
@@ -208,7 +208,7 @@ export function TokensView({ ready }) {
             )}
           </div>
           <div className="form-field">
-            <label className="form-label">权限范围</label>
+            <label className="form-label">授权权限范围</label>
             <div className="chips scope-chips">
               {scopes.map(scope => {
                 const active = pickedScopes.includes(scope);
@@ -236,25 +236,29 @@ export function TokensView({ ready }) {
         </form>
       )}
 
-      <section className="surface-box tasks-list-surface">
+      <section className={`surface-box ${!showForm ? 'optical-surface' : ''} tasks-list-surface`}>
         <div className="section-heading">
           <h2>
-            令牌
+            已签发令牌
             <span className="count-label">{tokens.length}</span>
           </h2>
           <button type="button" className="text-button" disabled={loading || !ready} onClick={loadTokens}>
-            {loading ? '刷新中…' : '刷新'}
+            {loading ? '刷新中…' : '刷新列表'}
           </button>
         </div>
 
         {loading && !tokens.length ? (
           <div className="loading-box">
             <Icon icon={LoaderCircle} size={24} className="spin" />
-            <span>正在读取…</span>
+            <span>正在读取令牌记录…</span>
           </div>
         ) : tokens.length === 0 ? (
           <div className="result-empty compact-empty">
-            <h3>还没有令牌</h3>
+            <div className="empty-symbol">
+              <Icon icon={KeyRound} size={24} />
+            </div>
+            <h3>还没有签发 API 令牌</h3>
+            <p>创建令牌后可按最小权限范围供内部脚本或系统读取项目名册与任务进度。</p>
           </div>
         ) : (
           <div className="task-rows">
@@ -269,11 +273,9 @@ export function TokensView({ ready }) {
                     </span>
                   </div>
                   <div className="task-row-meta">
-                    <span>{token.scopes.join(' · ')}</span>
-                    <span>·</span>
-                    <span>到期：{token.expiresAt ? formatDate(token.expiresAt) : '永久'}</span>
-                    <span>·</span>
-                    <span>最近使用：{token.lastUsedAt ? formatDate(token.lastUsedAt) : '从未'}</span>
+                    <span>权限：{token.scopes.join(' · ')}</span>
+                    <span className="tabular">到期：{token.expiresAt ? formatDate(token.expiresAt) : '永久'}</span>
+                    <span className="tabular">最近使用：{token.lastUsedAt ? formatDate(token.lastUsedAt) : '从未'}</span>
                   </div>
                 </div>
                 <div className="task-row-actions">
