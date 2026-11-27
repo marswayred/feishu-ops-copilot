@@ -35,8 +35,20 @@ export async function api(path, body, { method } = {}) {
   }
 }
 
+const OAUTH_STARTED_KEY = 'ops-copilot-oauth-started-at';
+
+export function clearOAuthFallback() {
+  window.sessionStorage?.removeItem(OAUTH_STARTED_KEY);
+}
+
+export function oauthStartedRecently(windowMs = 20000) {
+  const startedAt = Number(window.sessionStorage?.getItem(OAUTH_STARTED_KEY));
+  return Number.isFinite(startedAt) && Date.now() - startedAt < windowMs;
+}
+
 export function startWebOAuthLogin(returnTo = window.location.pathname) {
   const safePath = typeof returnTo === 'string' && returnTo.startsWith('/') ? returnTo : '/';
+  window.sessionStorage?.setItem(OAUTH_STARTED_KEY, String(Date.now()));
   window.location.assign(`/api/auth/oauth/start?returnTo=${encodeURIComponent(safePath)}`);
 }
 
@@ -72,28 +84,14 @@ export function loadFeishuSDK() {
   return sdkPromise;
 }
 
-export async function loginFeishu(appId, returnTo = window.location.pathname) {
-  if (!isFeishuClient()) {
-    startWebOAuthLogin(returnTo);
-    return null;
+export async function loginFeishu(_appId, returnTo = window.location.pathname, { force = false } = {}) {
+  // 端内 requestAccess 会把当前页面当成 redirect_uri，和回调地址不一致时飞书返回 20029。
+  // 统一走回调地址，只要求安全设置里有这一条。
+  if (!force && oauthStartedRecently()) {
+    throw new Error('飞书授权未完成。请确认重定向 URL 正好是 https://ops-copilot.aflowx.com/api/auth/oauth/callback（不要多斜杠、空格或换行），然后点击「登录飞书」。');
   }
-  const tt = await loadFeishuSDK();
-  if (!tt.requestAccess) throw new Error('请将飞书升级至 6.9 或以上版本后重试。');
-  const state = crypto.randomUUID();
-  const code = await new Promise((resolve, reject) => {
-    tt.requestAccess({
-      appID: appId,
-      scopeList: [],
-      state,
-      success: result => {
-        if (result.state !== state || !result.code) return reject(new Error('授权状态不一致，请重新登录。'));
-        resolve(result.code);
-      },
-      fail: () => reject(new Error('未完成飞书授权，请重试并同意应用获取登录信息。')),
-    });
-  });
-  await api('/api/auth/feishu', { code });
-  return api('/api/bootstrap');
+  startWebOAuthLogin(returnTo);
+  return null;
 }
 
 export async function chooseFeishuContacts(selectedUsers) {

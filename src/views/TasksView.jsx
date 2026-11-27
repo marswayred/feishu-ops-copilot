@@ -20,6 +20,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Trash2,
   Unlock,
   UserPlus,
   Users,
@@ -51,7 +52,6 @@ function buildEmailTemplate(task) {
     `各位同事好：`,
     ``,
     `现正式下发《${task.title}》（版本：${task.version}），请仔细阅读邮件正文或附件内容${task.docUrl ? `（在线文档：${task.docUrl}）` : ''}。`,
-    task.fileName ? `随信附件：${task.fileName}${task.fileSha256 ? `（SHA-256：${task.fileSha256}）` : ''}` : null,
     task.deadlineAt ? `确认截止日期：${task.deadlineAt}` : null,
     ``,
     `阅读完毕后，请点击下方专属链接通过飞书实名确认已读：`,
@@ -61,9 +61,9 @@ function buildEmailTemplate(task) {
 }
 
 function scopeLabel(scopeType) {
-  if (scopeType === 'all') return '全员在职通讯录';
-  if (scopeType === 'selection') return '指定成员 / 部门';
-  if (scopeType === 'numbers') return '指定工号列表';
+  if (scopeType === 'all') return '通讯录全员';
+  if (scopeType === 'selection') return '指定成员或部门';
+  if (scopeType === 'numbers') return '按工号批量导入';
   return scopeType;
 }
 
@@ -90,8 +90,6 @@ export function TasksView({
   const [deadlineAt, setDeadlineAt] = useState('');
   const [summary, setSummary] = useState('');
   const [docUrl, setDocUrl] = useState('');
-  const [fileName, setFileName] = useState('');
-  const [fileSha256, setFileSha256] = useState('');
   const [scopeMode, setScopeMode] = useState('all');
   const [numbersText, setNumbersText] = useState('');
   const [selected, setSelected] = useState({ users: [], departments: [] });
@@ -110,10 +108,10 @@ export function TasksView({
   const [reminding, setReminding] = useState(false);
   const [includingJoiners, setIncludingJoiners] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
+  const [deletingSlug, setDeletingSlug] = useState('');
   const [showBumpForm, setShowBumpForm] = useState(false);
   const [nextVersion, setNextVersion] = useState('');
   const [nextSummary, setNextSummary] = useState('');
-  const [nextFileName, setNextFileName] = useState('');
   const [nextSha256, setNextSha256] = useState('');
   const [bumping, setBumping] = useState(false);
 
@@ -211,8 +209,6 @@ export function TasksView({
     setDeadlineAt('2026-12-05');
     setSummary('请仔细阅读随信附带的《第四季度差旅报销标准修订说明》，确认知悉住宿标准调整、机票提前预订要求及电子发票归档规范。');
     setDocUrl('https://open.feishu.cn/document/home/index');
-    setFileName('2026Q4差旅报销与合规审批标准_v1.0.pdf');
-    setFileSha256('');
   }
 
   async function handleCreateTask(event) {
@@ -254,8 +250,6 @@ export function TasksView({
         deadlineAt,
         summary,
         docUrl,
-        fileName,
-        fileSha256,
         allowOutOfScope,
         scope,
       });
@@ -263,10 +257,8 @@ export function TasksView({
       setTitle('');
       setSummary('');
       setDocUrl('');
-      setFileName('');
-      setFileSha256('');
       setDeadlineAt('');
-      setBanner(`任务已创建，已固化 ${res.snapshotStats.activeTargets} 位在职应确认同事快照。`);
+      setBanner('任务已创建。');
       onNavigate(`/ops/tasks/${res.task.slug}`);
     } catch (err) {
       fail(err);
@@ -282,9 +274,15 @@ export function TasksView({
     setBanner('');
     try {
       const res = await api(`/api/ops/tasks/${encodeURIComponent(detail.task.slug)}/remind`, {});
-      const { sentCount, failedCount, simulated } = res.delivery;
+      const { sentCount, failedCount, simulated, failures } = res.delivery;
+      const reason = [...new Set((failures || []).map(item => item.message).filter(Boolean))].join(' ');
+      if (!simulated && sentCount === 0 && failedCount > 0) {
+        setError(reason || `飞书催办卡片未送达，失败 ${failedCount} 人。`);
+        await fetchTaskDetail(detail.task.slug);
+        return;
+      }
       setBanner(
-        `${simulated ? '【演示模拟】' : ''}已向待确认在职人员发送飞书催办卡片：成功 ${sentCount} 人${failedCount ? `，失败 ${failedCount} 人` : ''}。`,
+        `${simulated ? '【演示模拟】' : ''}已向待确认在职人员发送飞书催办卡片：成功 ${sentCount} 人${failedCount ? `，失败 ${failedCount} 人` : ''}。${reason && failedCount ? reason : ''}`,
       );
       await fetchTaskDetail(detail.task.slug);
     } catch (err) {
@@ -307,6 +305,25 @@ export function TasksView({
       fail(err);
     } finally {
       setIncludingJoiners(false);
+    }
+  }
+
+  async function handleDeleteTask(item) {
+    if (!item?.slug || deletingSlug) return;
+    const title = item.title || '这条任务';
+    if (!window.confirm(`删除「${title}」？签收记录会一并删除，且无法恢复。`)) return;
+    setDeletingSlug(item.slug);
+    setError('');
+    try {
+      await api(`/api/ops/tasks/${encodeURIComponent(item.slug)}`, undefined, { method: 'DELETE' });
+      setTasks(current => current.filter(task => task.slug !== item.slug));
+      setDetail(current => current?.task?.slug === item.slug ? null : current);
+      setBanner('任务已删除。');
+      if (activeSlug === item.slug) onNavigate('/ops/tasks');
+    } catch (err) {
+      fail(err);
+    } finally {
+      setDeletingSlug('');
     }
   }
 
@@ -335,7 +352,7 @@ export function TasksView({
       const res = await api(`/api/ops/tasks/${encodeURIComponent(detail.task.slug)}/version`, {
         version: nextVersion,
         summary: nextSummary,
-        fileName: nextFileName,
+        fileName: detail.task.fileName,
         fileSha256: nextSha256,
       });
       setDetail(prev => ({ ...prev, task: res.task, report: res.report }));
@@ -435,7 +452,6 @@ export function TasksView({
                 <p className="task-meta-line">
                   范围：{scopeLabel(task.scopeType)}
                   {task.deadlineAt ? ` · 截止日期：${task.deadlineAt}` : ''}
-                  {task.fileName ? ` · 附件：${task.fileName}` : ''}
                   {` · 创建人：${task.createdByName}`}
                 </p>
               </div>
@@ -448,7 +464,6 @@ export function TasksView({
                       setShowBumpForm(v => !v);
                       setNextVersion('');
                       setNextSummary(task.summary);
-                      setNextFileName(task.fileName);
                       setNextSha256(task.fileSha256);
                     }}
                   >
@@ -464,6 +479,15 @@ export function TasksView({
                   <Icon icon={task.status === 'active' ? Lock : Unlock} size={15} />
                   {task.status === 'active' ? '截止归档' : '重新开放'}
                 </button>
+                <button
+                  type="button"
+                  className="button danger-button"
+                  disabled={deletingSlug === task.slug}
+                  onClick={() => handleDeleteTask(task)}
+                >
+                  <Icon icon={Trash2} size={15} />
+                  {deletingSlug === task.slug ? '正在删除…' : '删除'}
+                </button>
               </div>
             </div>
 
@@ -473,28 +497,16 @@ export function TasksView({
                   <h2>升级文件版本并重新发起确认</h2>
                   <button type="button" className="text-button" onClick={() => setShowBumpForm(false)}>取消</button>
                 </div>
-                <p className="field-hint">升级版本号后，原版本的已确认记录会完整保留在数据库中，当前对账视图将按新版本号重新统计确认情况。</p>
-                <div className="form-grid-two">
-                  <div>
-                    <label className="form-label" htmlFor="bump-version">新版本号</label>
-                    <input
-                      id="bump-version"
-                      className="text-input"
-                      required
-                      placeholder="例如 v2.0"
-                      value={nextVersion}
-                      onChange={e => setNextVersion(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="bump-filename">新版附件文件名（可选）</label>
-                    <input
-                      id="bump-filename"
-                      className="text-input"
-                      value={nextFileName}
-                      onChange={e => setNextFileName(e.target.value)}
-                    />
-                  </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="bump-version">新版本号</label>
+                  <input
+                    id="bump-version"
+                    className="text-input"
+                    required
+                    placeholder="例如 v2.0"
+                    value={nextVersion}
+                    onChange={e => setNextVersion(e.target.value)}
+                  />
                 </div>
                 <div className="form-field">
                   <label className="form-label" htmlFor="bump-summary">新版必读说明</label>
@@ -580,7 +592,7 @@ export function TasksView({
                     spellCheck={false}
                   />
                   <div className="copy-row">
-                    <span>空格分隔去重，可直接粘贴进催办邮件收件人</span>
+                    <span>未确认邮箱</span>
                     <button
                       type="button"
                       className={`button ${copiedKey === 'pending-emails' ? 'success-button' : 'primary'}`}
@@ -600,9 +612,6 @@ export function TasksView({
                       <span className="muted-inline">上次推送：{formatDateTime(task.lastRemindedAt)}</span>
                     )}
                   </div>
-                  <p className="field-hint">
-                    通过同一飞书自建应用向当前全部 <strong>{stats.pendingCount}</strong> 位待确认在职同事推送交互式提醒卡片（即使无企业邮箱也可触达），卡片内含一键确认按钮。
-                  </p>
                   <div className="bot-action-row">
                     <button
                       type="button"
@@ -908,8 +917,7 @@ export function TasksView({
     <>
       <div className="page-heading">
         <div>
-          <h1>重要文件分发确认与全员对账。</h1>
-          <p>生成专属阅读确认链接放入邮件，员工通过飞书实名签收；后台自动与通讯录在职名单对比进度。</p>
+          <h1>重要文件签收确认</h1>
         </div>
         <button
           type="button"
@@ -918,7 +926,7 @@ export function TasksView({
           onClick={() => { setShowCreateForm(v => !v); setError(''); }}
         >
           <Icon icon={showCreateForm ? X : FilePlus2} size={16} />
-          {showCreateForm ? '收起新建表单' : '新建分发确认任务'}
+          {showCreateForm ? '收起' : '新建任务'}
         </button>
       </div>
 
@@ -945,7 +953,7 @@ export function TasksView({
       {showCreateForm && (
         <form className="surface-box create-task-form" onSubmit={handleCreateTask}>
           <div className="section-heading">
-            <h2>新建重要文件分发任务</h2>
+            <h2>新建任务</h2>
             {demo && (
               <button type="button" className="text-button" onClick={fillDemoTaskTemplate}>
                 填入制度通知示例
@@ -955,13 +963,12 @@ export function TasksView({
 
           <div className="form-grid-three">
             <div className="span-two">
-              <label className="form-label" htmlFor="task-title">任务标题（员工打开确认链接时首屏展示）</label>
+              <label className="form-label" htmlFor="task-title">任务标题</label>
               <input
                 id="task-title"
                 className="text-input"
                 required
                 maxLength={160}
-                placeholder="例如：《2026 年度员工廉洁自律与保密制度》知悉确认"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
               />
@@ -981,21 +988,20 @@ export function TasksView({
           </div>
 
           <div className="form-field">
-            <label className="form-label" htmlFor="task-summary">必读要点与确认声明</label>
+            <label className="form-label" htmlFor="task-summary">说明</label>
             <textarea
               id="task-summary"
               rows={4}
               required
               maxLength={8000}
-              placeholder="简要说明本次分发文件的核心条款、生效时间及员工需知悉的义务…"
               value={summary}
               onChange={e => setSummary(e.target.value)}
             />
           </div>
 
-          <div className="form-grid-three">
+          <div className="form-grid-two">
             <div>
-              <label className="form-label" htmlFor="task-doc-url">飞书云文档或查阅链接（可选）</label>
+              <label className="form-label" htmlFor="task-doc-url">文档链接</label>
               <input
                 id="task-doc-url"
                 className="text-input"
@@ -1006,17 +1012,7 @@ export function TasksView({
               />
             </div>
             <div>
-              <label className="form-label" htmlFor="task-file-name">随信邮件附件名称（可选）</label>
-              <input
-                id="task-file-name"
-                className="text-input"
-                placeholder="例如：员工手册_2026版.pdf"
-                value={fileName}
-                onChange={e => setFileName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="form-label" htmlFor="task-deadline">建议完成截止日期（可选）</label>
+              <label className="form-label" htmlFor="task-deadline">截止日期</label>
               <input
                 id="task-deadline"
                 className="text-input"
@@ -1027,20 +1023,9 @@ export function TasksView({
             </div>
           </div>
 
-          <div className="form-field">
-            <label className="form-label" htmlFor="task-sha256">附件 SHA-256 校验值（可选，64 位十六进制防篡改摘要）</label>
-            <input
-              id="task-sha256"
-              className="text-input mono-input"
-              placeholder="留空则不展示哈希值；填写后员工可核对本地附件完整性"
-              value={fileSha256}
-              onChange={e => setFileSha256(e.target.value)}
-            />
-          </div>
-
           <div className="audience-section">
             <div className="field-heading">
-              <label>应确认受众范围（创建时自动固化在职名单快照）</label>
+              <label>发送对象</label>
             </div>
             <div className="mode-tabs compact-tabs" role="tablist" onKeyDown={navigateTabs} aria-label="受众范围类型">
               <button
@@ -1050,7 +1035,7 @@ export function TasksView({
                 onClick={() => setScopeMode('all')}
               >
                 <Icon icon={Users} size={16} />
-                全员在职通讯录
+                通讯录全员
               </button>
               <button
                 type="button"
@@ -1059,7 +1044,7 @@ export function TasksView({
                 onClick={() => setScopeMode('selection')}
               >
                 <Icon icon={FolderTree} size={16} />
-                选择成员 / 部门
+                指定成员或部门
               </button>
               <button
                 type="button"
@@ -1068,15 +1053,9 @@ export function TasksView({
                 onClick={() => setScopeMode('numbers')}
               >
                 <Icon icon={FileText} size={16} />
-                按工号列表指定
+                按工号批量导入
               </button>
             </div>
-
-            {scopeMode === 'all' && (
-              <p className="field-hint">
-                将扫描当前应用获授权可见的全部通讯录在职员工（自动排除已离职与已冻结账号）作为应确认分母。
-              </p>
-            )}
 
             {scopeMode === 'selection' && (
               <div className="scope-subpanel">
@@ -1087,7 +1066,7 @@ export function TasksView({
                   onClick={chooseScopeContacts}
                 >
                   <Icon icon={picking ? LoaderCircle : Users} className={picking ? 'spin' : ''} />
-                  <span>{demo ? '打开演示通讯录选择范围' : '打开飞书选择器圈定部门或成员'}</span>
+                  <span>从通讯录选择</span>
                   <Icon icon={ChevronRight} />
                 </button>
                 {(selected.departments.length > 0 || selected.users.length > 0) && (
@@ -1139,7 +1118,7 @@ export function TasksView({
                   onChange={e => setNumbersText(e.target.value)}
                   spellCheck={false}
                 />
-                <span className="field-hint">已输入 {parsedDraftNumbers.length} 个不重复工号。</span>
+                <span className="field-hint">{parsedDraftNumbers.length} 个工号</span>
               </div>
             )}
 
@@ -1150,7 +1129,7 @@ export function TasksView({
                   checked={allowOutOfScope}
                   onChange={e => setAllowOutOfScope(e.target.checked)}
                 />
-                <span>允许不在上述范围内的同企业同事点击转发链接确认（单列统计，不计入原定分母）</span>
+                <span>允许范围外同事通过链接确认</span>
               </label>
             )}
           </div>
@@ -1161,7 +1140,7 @@ export function TasksView({
             </button>
             <button type="submit" className="button primary" disabled={creating}>
               <Icon icon={creating ? LoaderCircle : FileCheck2} size={16} className={creating ? 'spin' : ''} />
-              {creating ? '正在扫描通讯录并生成链接…' : '创建任务并生成确认链接'}
+              {creating ? '正在创建…' : '创建任务'}
             </button>
           </div>
         </form>
@@ -1170,7 +1149,7 @@ export function TasksView({
       <section className="surface-box tasks-list-surface" aria-labelledby="tasks-list-heading">
         <div className="section-heading">
           <h2 id="tasks-list-heading">
-            分发任务台账
+            任务列表
             <span className="count-label">{tasks.length}</span>
           </h2>
           <button
@@ -1186,15 +1165,11 @@ export function TasksView({
         {loadingList && !tasks.length ? (
           <div className="loading-box">
             <Icon icon={LoaderCircle} size={24} className="spin" />
-            <span>正在读取分发任务列表…</span>
+            <span>正在读取…</span>
           </div>
         ) : tasks.length === 0 ? (
           <div className="result-empty compact-empty">
-            <div className="empty-symbol">
-              <Icon icon={FileCheck2} size={30} />
-            </div>
-            <h3>还没有创建分发确认任务</h3>
-            <p>点击右上角「新建分发确认任务」，或先在「邮箱提取」选好收件人后一键转入。</p>
+            <h3>还没有任务</h3>
           </div>
         ) : (
           <div className="task-rows">
@@ -1246,8 +1221,17 @@ export function TasksView({
                       className="button primary"
                       onClick={() => onNavigate(`/ops/tasks/${item.slug}`)}
                     >
-                      通讯录对账与催办
+                      查看
                       <Icon icon={ChevronRight} size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className="button danger-button"
+                      disabled={deletingSlug === item.slug}
+                      onClick={() => handleDeleteTask(item)}
+                    >
+                      <Icon icon={Trash2} size={15} />
+                      {deletingSlug === item.slug ? '正在删除…' : '删除'}
                     </button>
                   </div>
                 </div>

@@ -343,3 +343,108 @@ export async function resolveTaskAudience(provider, scope) {
     scopeNote: provider.scopeNote || SCOPE_NOTE,
   };
 }
+
+/**
+ * 解析项目清单的成员选择：可按人、按部门（展开为成员名单）、按工号导入。
+ * 部门与工号都展开成具体成员，因此清单保存后是一份确定的名单。
+ */
+export async function resolveProjectMembers(provider, input = {}) {
+  provider.signal?.throwIfAborted();
+  const userIds = inputList(input.userIds || [], 'userIds', 500);
+  const departmentIds = inputList(input.departmentIds || [], 'departmentIds', 100);
+  const numbers = inputList(input.numbers || [], 'numbers', 500);
+  const includeChildren = input.includeChildren !== false;
+  const departmentLabels = new Map(
+    (Array.isArray(input.departmentLabels) ? input.departmentLabels : [])
+      .filter(item => item && typeof item.id === 'string' && typeof item.name === 'string')
+      .map(item => [item.id, item.name.trim()]),
+  );
+  const issues = [];
+  const collected = new Map();
+  const addUser = (user, source) => {
+    const id = userId(user);
+    if (id === input.ownerOpenId) return;
+    const existing = collected.get(id);
+    if (existing) {
+      if (!existing.sources.includes(source)) existing.sources.push(source);
+      return;
+    }
+    collected.set(id, { user, sources: [source] });
+  };
+
+  if (!userIds.length && !departmentIds.length && !numbers.length) return { members: [], issues: [] };
+
+  const departmentNameMap = typeof provider.getDepartmentNameMap === 'function'
+    ? await provider.getDepartmentNameMap()
+    : new Map();
+  for (const [id, name] of departmentLabels) if (name && !departmentNameMap.has(id)) departmentNameMap.set(id, name);
+  provider.signal?.throwIfAborted();
+
+  let scanned = 0;
+  for (const id of userIds) {
+    provider.signal?.throwIfAborted();
+    const user = await provider.getUser(id);
+    if (!user) issues.push({ key: id, source: 'project', reason: 'not_found', message: '未找到所选成员。' });
+    else { assertScanLimit(++scanned); addUser(user, 'project'); }
+  }
+
+  if (departmentIds.length) {
+    const departments = new Set(departmentIds);
+    if (includeChildren) {
+      for (const id of departmentIds) {
+        provider.signal?.throwIfAborted();
+        for (const child of await provider.listDescendantDepartments(id)) {
+          const cid = departmentId(child);
+          departments.add(cid);
+          const name = typeof child?.name === 'string' ? child.name.trim() : '';
+          if (name && !departmentNameMap.has(cid)) departmentNameMap.set(cid, name);
+        }
+      }
+    }
+    for (const id of departments) {
+      provider.signal?.throwIfAborted();
+      const users = await provider.listDepartmentUsers(id);
+      if (!Array.isArray(users)) throw new DirectoryError('通讯录 provider 未返回用户数组。');
+      assertScanLimit(scanned += users.length);
+      for (const user of users) {
+        if (!Array.isArray(user.department_ids) || !user.department_ids.length) user.department_ids = [id];
+        addUser(user, 'department');
+      }
+    }
+  }
+
+  if (numbers.length) {
+    const all = await provider.listAllUsers();
+    if (!Array.isArray(all)) throw new DirectoryError('通讯录 provider 未返回用户数组。');
+    const index = new Map();
+    for (const user of all) {
+      const no = typeof user.employee_no === 'string' ? user.employee_no.trim() : '';
+      if (!no) continue;
+      if (!index.has(no)) index.set(no, []);
+      index.get(no).push(user);
+    }
+    for (const number of numbers) {
+      const candidates = index.get(number) || [];
+      if (!candidates.length) issues.push({ key: number, source: 'numbers', reason: 'not_found', message: '在授权可见范围内未找到该工号。' });
+      else if (candidates.length > 1) issues.push({ key: number, source: 'numbers', reason: 'ambiguous', message: '该工号对应多位成员，已跳过。' });
+      else addUser(candidates[0], 'numbers');
+    }
+  }
+
+  const members = [];
+  for (const { user, sources } of collected.values()) {
+    const normalized = normalizeDirectoryMember(user, departmentNameMap);
+    if (normalized.inactive) {
+      issues.push({
+        key: normalized.employeeNo || normalized.openId,
+        source: sources[0],
+        reason: 'inactive',
+        message: `${normalized.name} 已离职或账号被冻结，未加入项目。`,
+      });
+      continue;
+    }
+    members.push({ ...normalized, source: sources[0] });
+  }
+  members.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN') || a.employeeNo.localeCompare(b.employeeNo, 'zh-CN'));
+  return { members, issues };
+}

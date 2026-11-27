@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Briefcase,
@@ -7,6 +7,8 @@ import {
   CircleAlert,
   Copy,
   FileCheck2,
+  FolderKanban,
+  KeyRound,
   LoaderCircle,
   Lock,
   Mail,
@@ -17,10 +19,13 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
-import { api, copyTextWithFallback, isFeishuClient, loginFeishu, startWebOAuthLogin } from './feishu.js';
+import { api, clearOAuthFallback, copyTextWithFallback, isFeishuClient, loginFeishu, startWebOAuthLogin } from './feishu.js';
 import { MailView } from './views/MailView.jsx';
 import { TasksView } from './views/TasksView.jsx';
+import { ProjectsView } from './views/ProjectsView.jsx';
+import { TokensView } from './views/TokensView.jsx';
 import { AckView, MyAcksView } from './views/AckView.jsx';
+import { MemberPicker } from './components/MemberPicker.jsx';
 import './styles.css';
 
 const Icon = ({ icon: Component, ...props }) => <Component size={18} strokeWidth={1.8} aria-hidden="true" {...props} />;
@@ -30,7 +35,10 @@ function parseRoute(pathname) {
   const ackMatch = clean.match(/^\/ack\/([A-Za-z0-9_-]+)$/);
   if (ackMatch) return { kind: 'ack', slug: ackMatch[1] };
   if (clean === '/my/acks') return { kind: 'my-acks' };
-  if (clean === '/ops/permissions') return { kind: 'permissions' };
+  if (clean === '/ops/permissions') return { kind: 'redirect', to: '/ops/admin/permissions' };
+  if (clean === '/ops/admin' || clean === '/ops/admin/permissions') return { kind: 'admin', section: 'permissions' };
+  if (clean === '/ops/admin/tokens') return { kind: 'admin', section: 'tokens' };
+  if (clean === '/ops/projects') return { kind: 'projects' };
   const taskDetailMatch = clean.match(/^\/ops\/tasks\/([A-Za-z0-9_-]+)$/);
   if (taskDetailMatch) return { kind: 'tasks', slug: taskDetailMatch[1] };
   if (clean === '/ops/tasks') return { kind: 'tasks', slug: '' };
@@ -41,9 +49,8 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [openId, setOpenId] = useState('');
-  const [name, setName] = useState('');
-  const [employeeNo, setEmployeeNo] = useState('');
+  const [picked, setPicked] = useState([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [role, setRole] = useState('operator');
   const [saving, setSaving] = useState(false);
   const [refreshingDir, setRefreshingDir] = useState(false);
@@ -81,20 +88,21 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
 
   async function handleAddGrant(event) {
     event.preventDefault();
-    if (!openId.trim() || saving) return;
+    if (!picked.length || saving) return;
     setSaving(true);
     setError('');
     try {
-      const next = await api('/api/ops/admins', {
-        openId: openId.trim(),
-        name: name.trim(),
-        employeeNo: employeeNo.trim(),
-        role,
-      });
-      setData(prev => ({ ...prev, ...next }));
-      setOpenId('');
-      setName('');
-      setEmployeeNo('');
+      let next = null;
+      for (const person of picked) {
+        next = await api('/api/ops/admins', {
+          openId: person.openId,
+          name: person.name,
+          employeeNo: person.employeeNo,
+          role,
+        });
+      }
+      if (next) setData(prev => ({ ...prev, ...next }));
+      setPicked([]);
       await onRefreshBootstrap?.();
     } catch (err) {
       setError(err.message);
@@ -132,8 +140,7 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
     <>
       <div className="page-heading">
         <div>
-          <h1>命名空间与运营权限同步</h1>
-          <p>「邮箱提取」与「分发确认」共用同一飞书应用凭证、通讯录缓存及后台协作者名单。</p>
+          <h2>权限管理</h2>
         </div>
         <button
           type="button"
@@ -175,62 +182,59 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
       <div className="workspace permissions-workspace">
         <section className="input-panel" aria-labelledby="add-operator-heading">
           <div className="section-heading">
-            <h2 id="add-operator-heading">新增运营后台协作者</h2>
+            <h2 id="add-operator-heading">添加成员</h2>
           </div>
-          <p className="field-hint">
-            所有本企业飞书员工默认均可点击邮件确认链接签收，无需在此添加；此处仅授权可进入「邮箱提取」与「分发确认管理」后台的同事。
-          </p>
           <form onSubmit={handleAddGrant}>
             <div className="form-field">
-              <label className="form-label" htmlFor="grant-openid">成员飞书 open_id</label>
-              <input
-                id="grant-openid"
-                className="text-input mono-input"
-                required
-                placeholder="例如 ou_xxxxxxxxxxxxxxxx"
-                value={openId}
-                onChange={e => setOpenId(e.target.value)}
-              />
-            </div>
-            <div className="form-grid-two">
-              <div>
-                <label className="form-label" htmlFor="grant-name">姓名备注（可选）</label>
-                <input
-                  id="grant-name"
-                  className="text-input"
-                  placeholder="例如 张三"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="form-label" htmlFor="grant-empno">工号备注（可选）</label>
-                <input
-                  id="grant-empno"
-                  className="text-input mono-input"
-                  placeholder="例如 E1005"
-                  value={employeeNo}
-                  onChange={e => setEmployeeNo(e.target.value)}
-                />
-              </div>
+              <label className="form-label">成员</label>
+              <button type="button" className="choose-button" onClick={() => setPickerOpen(true)}>
+                <Icon icon={UserPlus} size={16} />
+                <span>从通讯录选择</span>
+              </button>
+              {picked.length > 0 && (
+                <div className="chips scope-chips">
+                  {picked.map(person => (
+                    <span className="chip" key={person.openId}>
+                      <span>{person.name}{person.employeeNo ? ` ${person.employeeNo}` : ''}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPicked(current => current.filter(item => item.openId !== person.openId))}
+                        aria-label={`移除 ${person.name}`}
+                      >
+                        <Icon icon={X} size={13} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="form-field">
-              <label className="form-label" htmlFor="grant-role">角色类型</label>
+              <label className="form-label" htmlFor="grant-role">角色</label>
               <select
                 id="grant-role"
                 className="select-input"
                 value={role}
                 onChange={e => setRole(e.target.value)}
               >
-                <option value="operator">运营协作者（可使用邮箱提取与分发对账）</option>
-                <option value="admin">系统管理员（包含权限管理）</option>
+                <option value="operator">运营协作者</option>
+                <option value="admin">管理员</option>
               </select>
             </div>
-            <button type="submit" className="button primary submit-button" disabled={saving || !openId.trim()}>
+            <button type="submit" className="button primary submit-button" disabled={saving || !picked.length}>
               <Icon icon={UserPlus} size={16} />
-              授权进入运营助手后台
+              {saving ? '正在添加…' : '加入权限'}
             </button>
           </form>
+          {pickerOpen && (
+            <MemberPicker
+              selected={picked}
+              onClose={() => setPickerOpen(false)}
+              onConfirm={people => {
+                setPicked(people);
+                setPickerOpen(false);
+              }}
+            />
+          )}
         </section>
 
         <section className="result-panel" aria-labelledby="operator-list-heading">
@@ -257,9 +261,8 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
                   {data.grants.map(grant => (
                     <div className="matched-row" key={grant.openId}>
                       <div>
-                        <strong>{grant.name || grant.openId}</strong>
+                        <strong>{grant.name || '未命名成员'}</strong>
                         {grant.employeeNo && <code>{grant.employeeNo}</code>}
-                        <code>{grant.openId}</code>
                       </div>
                       <div className="grant-row-right">
                         <span className="badge version-badge">{grant.role === 'admin' ? '管理员' : '运营协作'}</span>
@@ -288,6 +291,50 @@ function PermissionsView({ bootstrap, onRefreshBootstrap }) {
   );
 }
 
+function AdminCenterView({ bootstrap, section, onNavigate, onRefreshBootstrap, ready }) {
+  const isAdmin = bootstrap?.user?.role === 'admin';
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <h1>管理中心</h1>
+        </div>
+      </div>
+      <div className="mode-tabs compact-tabs" role="tablist" aria-label="管理中心子功能">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={section === 'permissions'}
+          onClick={() => onNavigate('/ops/admin/permissions')}
+        >
+          <Icon icon={ShieldCheck} size={16} />
+          权限管理
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={section === 'tokens'}
+          onClick={() => onNavigate('/ops/admin/tokens')}
+        >
+          <Icon icon={KeyRound} size={16} />
+          API 令牌
+        </button>
+      </div>
+
+      {section === 'permissions' ? (
+        <PermissionsView bootstrap={bootstrap} onRefreshBootstrap={onRefreshBootstrap} />
+      ) : isAdmin ? (
+        <TokensView ready={ready} />
+      ) : (
+        <div className="notice auth-notice">
+          <Icon icon={Lock} />
+          <span>API 令牌仅管理员可管理。</span>
+        </div>
+      )}
+    </>
+  );
+}
+
 function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [bootstrap, setBootstrap] = useState(null);
@@ -295,6 +342,7 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [draftAudience, setDraftAudience] = useState(null);
   const [openIdCopied, setOpenIdCopied] = useState(false);
+  const autoLoginAttempted = useRef(false);
 
   const navigate = useCallback(nextPath => {
     if (nextPath === window.location.pathname) return;
@@ -325,30 +373,51 @@ function App() {
     refreshBootstrap();
   }, [refreshBootstrap]);
 
+  useEffect(() => {
+    if (bootstrap?.authenticated) clearOAuthFallback();
+  }, [bootstrap?.authenticated]);
+
   const route = parseRoute(pathname);
+
+  useEffect(() => {
+    if (route.kind !== 'redirect') return;
+    window.history.replaceState({}, '', route.to);
+    setPathname(route.to);
+  }, [route.kind, route.to]);
   const demo = bootstrap?.mode === 'demo';
   const authenticated = Boolean(bootstrap?.authenticated);
   const canManageOps = Boolean(bootstrap?.user?.canManageOps);
   const ready = Boolean(bootstrap) && authenticated && canManageOps;
   const isEmployeeSurface = route.kind === 'ack' || route.kind === 'my-acks';
+  const inFeishuClient = isFeishuClient();
 
-  async function handleFeishuLogin() {
-    if (!bootstrap) return;
+  const handleFeishuLogin = useCallback(async ({ silent = false } = {}) => {
+    if (!bootstrap || bootstrap.mode === 'demo') return false;
     setGlobalError('');
     if (!isFeishuClient()) {
       startWebOAuthLogin(pathname);
-      return;
+      return true;
     }
     setAuthBusy(true);
     try {
-      const next = await loginFeishu(bootstrap.appId, pathname);
+      const next = await loginFeishu(bootstrap.appId, pathname, { force: !silent });
       if (next) setBootstrap(next);
+      return Boolean(next?.authenticated);
     } catch (err) {
-      setGlobalError(err.message);
+      setGlobalError(err.message || '飞书免登未完成，请点击下方按钮重试。');
+      return false;
     } finally {
       setAuthBusy(false);
     }
-  }
+  }, [bootstrap, pathname]);
+
+  // 飞书客户端内打开时自动跳转授权。不走 requestAccess，避免 20029（当前页不是回调地址）。
+  useEffect(() => {
+    if (!bootstrap || demo || authenticated || isEmployeeSurface) return;
+    if (!inFeishuClient || autoLoginAttempted.current || authBusy) return;
+    autoLoginAttempted.current = true;
+    handleFeishuLogin({ silent: true });
+  }, [bootstrap, demo, authenticated, isEmployeeSurface, inFeishuClient, authBusy, handleFeishuLogin]);
 
   async function handleDemoPersonaChange(event) {
     const nextOpenId = event.target.value;
@@ -415,11 +484,19 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className={`topbar-link ${route.kind === 'permissions' ? 'active' : ''}`}
-                  onClick={() => navigate('/ops/permissions')}
+                  className={`topbar-link ${route.kind === 'projects' ? 'active' : ''}`}
+                  onClick={() => navigate('/ops/projects')}
+                >
+                  <Icon icon={FolderKanban} size={16} />
+                  项目清单
+                </button>
+                <button
+                  type="button"
+                  className={`topbar-link ${route.kind === 'admin' ? 'active' : ''}`}
+                  onClick={() => navigate('/ops/admin/permissions')}
                 >
                   <Icon icon={ShieldCheck} size={16} />
-                  权限同步
+                  管理中心
                 </button>
               </nav>
             </>
@@ -504,14 +581,33 @@ function App() {
           <div className="notice auth-notice">
             <Icon icon={ShieldCheck} />
             <span>
-              <strong>先登录飞书，再进入运营助手工作台</strong>
+              <strong>
+                {authBusy
+                  ? '正在跳转飞书授权…'
+                  : '先登录飞书，再进入运营助手工作台'}
+              </strong>
               <br />
-              支持在飞书工作台内一键免登，或在普通浏览器中通过飞书扫码 / 桌面端快捷授权登录。
+              {inFeishuClient
+                ? '将使用已配置的回调地址完成登录，不会再校验当前页面地址。'
+                : '普通浏览器中将跳转飞书扫码 / 桌面端快捷授权登录。'}
             </span>
-            <button type="button" className="button primary" onClick={handleFeishuLogin} disabled={authBusy}>
-              {authBusy && <Icon icon={LoaderCircle} className="spin" />}
-              {authBusy ? '正在授权…' : '登录飞书'}
-            </button>
+            {!(authBusy && inFeishuClient) && (
+              <button
+                type="button"
+                className="button primary"
+                onClick={() => handleFeishuLogin()}
+                disabled={authBusy}
+              >
+                {authBusy && <Icon icon={LoaderCircle} className="spin" />}
+                {authBusy ? '正在授权…' : '登录飞书'}
+              </button>
+            )}
+            {authBusy && inFeishuClient && (
+              <span className="auth-busy-line">
+                <Icon icon={LoaderCircle} className="spin" />
+                免登进行中
+              </span>
+            )}
           </div>
         ) : bootstrap && authenticated && !canManageOps ? (
           <div className="ack-container">
@@ -570,8 +666,18 @@ function App() {
             onNavigate={navigate}
             onAuthError={() => setBootstrap(prev => prev && { ...prev, authenticated: false })}
           />
-        ) : route.kind === 'permissions' ? (
-          <PermissionsView bootstrap={bootstrap} onRefreshBootstrap={refreshBootstrap} />
+        ) : route.kind === 'admin' ? (
+          <AdminCenterView
+            bootstrap={bootstrap}
+            section={route.section}
+            ready={ready}
+            onNavigate={navigate}
+            onRefreshBootstrap={refreshBootstrap}
+          />
+        ) : route.kind === 'projects' ? (
+          <ProjectsView bootstrap={bootstrap} ready={ready} />
+        ) : route.kind === 'redirect' ? (
+          null
         ) : (
           <MailView
             bootstrap={bootstrap}
@@ -581,10 +687,6 @@ function App() {
           />
         )}
 
-        <footer>
-          <span>飞书运营助手 · 统一通讯录邮箱提取与重要文件实名确认</span>
-          <span>{demo ? '演示模式：所有人员与回执均为本地虚构样本' : '实名确认记录与通讯录数据仅限企业内部合规运营使用'}</span>
-        </footer>
       </main>
     </>
   );

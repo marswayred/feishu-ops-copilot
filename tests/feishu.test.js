@@ -4,7 +4,7 @@ import { getEventListeners } from 'node:events';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { FeishuClient, FeishuDirectory, FeishuApiError } from '../server/feishu.js';
+import { FeishuClient, FeishuDirectory, FeishuApiError, buildReminderCard, sendFeishuReminderCards } from '../server/feishu.js';
 import { DirectoryError } from '../server/directory.js';
 import { createDirectoryCache } from '../server/directory-cache.js';
 
@@ -446,4 +446,59 @@ test('provider errors propagate without returning partially scanned directory', 
     throw failure;
   } });
   await assert.rejects(directory.listAllUsers(), error => error === failure);
+});
+
+test('department scan records membership when Feishu omits department_ids', async () => {
+  const directory = new FeishuDirectory({ request: async (path, { query }) => {
+    if (path.endsWith('/scopes')) return envelope(scope({ department_ids: ['od-root'] }));
+    if (path.endsWith('/children')) return envelope({ items: [{ open_department_id: 'od-child', name: '子部门' }], has_more: false });
+    if (path.endsWith('/find_by_department')) return envelope({ items: [user(query.department_id === 'od-root' ? 'a' : 'b')], has_more: false });
+    return envelope({ items: [], has_more: false });
+  } });
+  const users = await directory.listAllUsers();
+  const byId = new Map(users.map(item => [item.open_id, item.department_ids]));
+  assert.deepEqual(byId.get('a'), ['od-root']);
+  assert.deepEqual(byId.get('b'), ['od-child']);
+});
+
+test('department names prefer API fields and fill gaps from the local fallback file', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'feishu-dept-names-'));
+  const filePath = path.join(dir, 'department-names.json');
+  await fs.writeFile(filePath, JSON.stringify({ departments: { 'od-hidden': '财务部', 'od-named': '不应覆盖' } }));
+  const directory = new FeishuDirectory({ request: async path => {
+    assert.equal(path, '/contact/v3/departments/0/children');
+    return envelope({
+      items: [
+        { open_department_id: 'od-named', name: '研发部' },
+        { open_department_id: 'od-i18n', i18n_name: { zh_cn: '市场部' } },
+        { open_department_id: 'od-hidden' },
+      ],
+      has_more: false,
+    });
+  } }, { departmentNamesFile: filePath });
+  const names = await directory.getDepartmentNameMap();
+  assert.equal(names.get('od-named'), '研发部');
+  assert.equal(names.get('od-i18n'), '市场部');
+  assert.equal(names.get('od-hidden'), '财务部');
+  await fs.rm(dir, { recursive: true, force: true });
+});
+
+test('bot-disabled reminder stops after the global failure and explains how to enable it', async () => {
+  let calls = 0;
+  const delivery = await sendFeishuReminderCards({
+    request: async () => {
+      calls += 1;
+      throw new FeishuApiError('Bot ability is not activated.', { code: 230006 });
+    },
+  }, {
+    recipients: [{ openId: 'ou_a', name: '甲' }, { openId: 'ou_b', name: '乙' }, { openId: 'ou_c', name: '丙' }],
+    card: buildReminderCard({ title: '制度', ackUrl: 'https://ops.example.com/ack/demo' }),
+    concurrency: 1,
+  });
+  assert.equal(calls, 1);
+  assert.equal(delivery.sentCount, 0);
+  assert.equal(delivery.failedCount, 3);
+  assert.equal(delivery.failures[0].code, 230006);
+  assert.match(delivery.failures[0].message, /机器人/);
+  assert.equal(delivery.failures[2].message, delivery.failures[0].message);
 });

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const VERSION = 1;
+const VERSION = 2;
 
 function slimUser(user) {
   return {

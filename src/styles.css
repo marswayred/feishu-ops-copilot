@@ -176,6 +176,14 @@ h1 {
 .notice > span { flex: 1; min-width: 0; }
 .notice strong { font-weight: 600; }
 .demo-notice, .auth-notice { background: #e6eef8; color: #2c4a67; }
+.auth-busy-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+  font-size: 13px;
+  color: #2c4a67;
+}
 .success-notice { background: var(--green-bg); color: var(--green); }
 .error-notice { background: var(--red-bg); color: var(--red); }
 .error-notice .icon-button { color: var(--red); }
@@ -219,6 +227,12 @@ h1 {
   color: #2c455d;
 }
 .ghost-button:hover:not(:disabled) { background: #f3f6fa; border-color: #aebfd0; }
+.danger-button {
+  background: #fff;
+  color: #9b2c2c;
+  border-color: #e4b4b4;
+}
+.danger-button:hover:not(:disabled) { background: #fff5f5; border-color: #d08a8a; }
 .success-button { background: var(--green); color: #fff; }
 .text-button {
   border: 0;
@@ -579,6 +593,10 @@ h2 { font-size: 17px; font-weight: 650; line-height: 1.5; }
 .chip button { border: 0; background: none; padding: 3px; border-radius: 3px; color: #576d84; }
 .chip button:hover:not(:disabled) { background: #d8e1ec; color: #163958; }
 .department-chip { background: #e8f0fa; color: #285287; }
+.chip.scope-choice { cursor: pointer; padding: 6px 10px; }
+.chip.scope-choice input { margin: 0; }
+.chip.scope-choice code { font-size: 11px; color: #5b7292; }
+.token-plain { display: block; margin-top: 8px; word-break: break-all; }
 
 .checkbox-label {
   display: flex;

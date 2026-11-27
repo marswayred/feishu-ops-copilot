@@ -263,4 +263,18 @@ test('end-to-end task lifecycle: snapshot, employee confirm, live joiner/resigne
   assert.equal(bumpRes.task.version, 'v2.0');
   assert.equal(bumpRes.report.stats.confirmedCount, 0);
   assert.equal(bumpRes.report.stats.pendingCount, 4);
+
+  loginIdentity = { open_id: 'ou_alice', name: '张晓', employee_no: 'E002' };
+  const employeeLogin = await request('/api/auth/feishu', { method: 'POST', body: { code: 'employee_code' } });
+  const employeeCookie = employeeLogin.headers.get('set-cookie').split(';')[0];
+  const denied = await request('/api/ops/tasks/sec-handbook-2026', { method: 'DELETE', cookie: employeeCookie });
+  assert.equal(denied.status, 403);
+
+  const removed = await request('/api/ops/tasks/sec-handbook-2026', { method: 'DELETE', cookie: adminCookie });
+  assert.equal(removed.status, 200);
+  assert.equal((await removed.json()).deleted, true);
+  assert.equal((await request('/api/ops/tasks/sec-handbook-2026', { cookie: adminCookie })).status, 404);
+  assert.equal((await request('/api/ack/sec-handbook-2026')).status, 404);
+  const remaining = await (await request('/api/ops/tasks', { cookie: adminCookie })).json();
+  assert.equal(remaining.tasks.some(task => task.slug === 'sec-handbook-2026'), false);
 });

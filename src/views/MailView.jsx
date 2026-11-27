@@ -9,7 +9,6 @@ import {
   FileCheck2,
   FileText,
   FolderTree,
-  HelpCircle,
   LoaderCircle,
   Mail,
   Search,
@@ -146,8 +145,7 @@ export function MailView({ bootstrap, ready, onAuthError, onCreateTaskFromAudien
     <>
       <div className="page-heading">
         <div>
-          <h1>把同事名单，变成收件邮箱集合。</h1>
-          <p>按工号查询，或直接选择成员与部门；复制邮箱发信后，可一键将同一批名单转为文件确认任务。</p>
+          <h1>邮件地址整理</h1>
         </div>
         <div className="privacy-note">
           <Icon icon={ShieldCheck} />
@@ -214,7 +212,7 @@ export function MailView({ bootstrap, ready, onAuthError, onCreateTaskFromAudien
                   )}
                 </div>
                 <p className="field-hint" id="numbers-hint">
-                  一行一个，最多 {maxNumbers.toLocaleString()} 个。保留前导零，自动忽略空行和重复工号。
+                  一行一个，最多 {maxNumbers.toLocaleString()} 个，自动去重。
                 </p>
                 <textarea
                   id="employee-numbers"
@@ -353,7 +351,6 @@ export function MailView({ bootstrap, ready, onAuthError, onCreateTaskFromAudien
                 <Icon icon={busy ? LoaderCircle : Mail} size={33} className={busy ? 'spin' : ''} />
               </div>
               <h3>{busy ? '正在整理邮箱' : '邮箱会整理在这里'}</h3>
-              <p>{busy ? '正在匹配成员并展开部门，请稍候。' : '从左侧输入工号或选择成员，\n查询后即可一键复制，或直接转为分发确认任务。'}</p>
               <div className="format-example">
                 <span>输出格式</span>
                 <code>name@example.com other@example.com</code>
@@ -469,27 +466,6 @@ export function MailView({ bootstrap, ready, onAuthError, onCreateTaskFromAudien
           )}
         </section>
       </div>
-
-      <section className="usage" id="usage" aria-labelledby="usage-title">
-        <div className="usage-title">
-          <Icon icon={HelpCircle} size={18} />
-          <h2 id="usage-title">与文件分发确认如何配合</h2>
-        </div>
-        <div className="usage-columns">
-          <div>
-            <h3>第一步：提取目标同事邮箱</h3>
-            <p>按部门或工号整理出在职同事的企业邮箱（enterprise_email），自动去重并剔除已离职或冻结账号。</p>
-          </div>
-          <div>
-            <h3>第二步：一键转为分发确认任务</h3>
-            <p>点击结果区「以此范围新建确认任务」，无需重复选人即可生成专属确认链接与标准邮件通知文案。</p>
-          </div>
-          <div>
-            <h3>第三步：对账与未读催办闭环</h3>
-            <p>邮件发出后，在「分发确认」页实时对比通讯录签收进度，支持一键复制未确认同事邮箱或推送飞书催办卡片。</p>
-          </div>
-        </div>
-      </section>
 
       {picker && (
         <DemoPicker

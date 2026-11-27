@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import { assertScanLimit, departmentId, userId, SCOPE_NOTE, DirectoryError } from './directory.js';
 
 const ORIGIN = 'https://open.feishu.cn';
@@ -202,23 +203,83 @@ export class FeishuClient {
 }
 
 const ID_TYPES = { user_id_type: 'open_id', department_id_type: 'open_department_id' };
+const DEPARTMENT_ID_RE = /^od-[A-Za-z0-9_-]{1,128}$/;
+const GLOBAL_REMINDER_CODES = new Set([230006, 99991672]);
+
+function departmentLabel(department) {
+  if (!department || typeof department !== 'object') return '';
+  if (typeof department.name === 'string' && department.name.trim()) return department.name.trim();
+  const i18n = department.i18n_name;
+  if (!i18n || typeof i18n !== 'object') return '';
+  for (const key of ['zh_cn', 'zh_hk', 'zh_tw', 'en_us']) {
+    if (typeof i18n[key] === 'string' && i18n[key].trim()) return i18n[key].trim();
+  }
+  return '';
+}
+
+function withDepartment(user, openDepartmentId) {
+  if (typeof openDepartmentId !== 'string' || !openDepartmentId.trim()) return user;
+  const dept = openDepartmentId.trim();
+  const current = Array.isArray(user.department_ids)
+    ? user.department_ids.filter(id => typeof id === 'string' && id.trim())
+    : [];
+  if (current.includes(dept)) return user;
+  return { ...user, department_ids: [...current, dept] };
+}
+
+async function readDepartmentNameFallback(filePath) {
+  if (typeof filePath !== 'string' || !filePath.trim()) return new Map();
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    if (raw.length > 1_000_000) return new Map();
+    const payload = JSON.parse(raw);
+    const entries = payload?.departments;
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return new Map();
+    const map = new Map();
+    for (const [id, name] of Object.entries(entries)) {
+      if (!DEPARTMENT_ID_RE.test(id) || typeof name !== 'string' || !name.trim()) continue;
+      map.set(id, name.trim().slice(0, 80));
+    }
+    return map;
+  } catch (error) {
+    if (error?.code !== 'ENOENT') console.error('department_name_fallback_read_failed', error.code || error.name);
+    return new Map();
+  }
+}
+
+function reminderFailure(error) {
+  const code = error?.code ?? 'SEND_FAILED';
+  let message = '未能送达飞书机器人消息，请检查应用是否启用机器人能力、im:message:send_as_bot 权限及成员可见范围。';
+  if (code === 230006) message = '应用未开启机器人能力。请到飞书开发者后台为该应用添加「机器人」能力，创建版本并发布后再试。';
+  else if (code === 230013) message = '该成员不在机器人可用范围内。请在应用发布的可用范围中包含需要催办的同事。';
+  else if (code === 99991672) message = '应用缺少「以应用身份发消息」权限，请在飞书开放平台开通 im:message:send_as_bot 并发布版本。';
+  return { code, message, global: GLOBAL_REMINDER_CODES.has(code) };
+}
 const SCAN_CONCURRENCY = 8;
 const USER_BATCH_SIZE = 50;
 
 export class FeishuDirectory {
-  constructor(client, { signal, cache = null } = {}) {
+  constructor(client, { signal, cache = null, departmentNamesFile = null } = {}) {
     if (typeof client?.request !== 'function') throw new TypeError('client 必须实现 request');
     if (cache != null && (typeof cache.get !== 'function' || typeof cache.set !== 'function')) {
       throw new TypeError('cache 必须实现 get/set');
     }
+    if (departmentNamesFile != null && (typeof departmentNamesFile !== 'string' || !departmentNamesFile.trim())) {
+      throw new TypeError('departmentNamesFile 必须为非空路径或 null');
+    }
     this.client = client;
     this.signal = signal;
     this.cache = cache;
+    this.departmentNamesFile = departmentNamesFile ? departmentNamesFile.trim() : null;
     this.scopeNote = SCOPE_NOTE;
   }
 
   withSignal(signal) {
-    return new FeishuDirectory(this.client, { signal, cache: this.cache });
+    return new FeishuDirectory(this.client, {
+      signal,
+      cache: this.cache,
+      departmentNamesFile: this.departmentNamesFile,
+    });
   }
 
   async clearCache() {
@@ -387,16 +448,18 @@ export class FeishuDirectory {
     });
     const users = new Map();
     let scanned = 0;
-    const add = user => {
+    // 用户字段权限未开通时，飞书不返回 department_ids。按查询部门把归属记到成员上。
+    const add = (user, openDepartmentId) => {
       this.signal?.throwIfAborted();
       assertScanLimit(++scanned);
       const id = userId(user);
-      if (!users.has(id)) users.set(id, user);
+      const existing = users.get(id);
+      users.set(id, withDepartment(existing || user, openDepartmentId));
     };
     for (const user of await this.getUsers([...directUsers])) add(user);
     await mapPool(departments, SCAN_CONCURRENCY, async id => {
       this.signal?.throwIfAborted();
-      for (const user of await this.listDepartmentUsers(id)) add(user);
+      for (const user of await this.listDepartmentUsers(id)) add(user, id);
     });
     this.signal?.throwIfAborted();
     const result = [...users.values()];
@@ -407,6 +470,29 @@ export class FeishuDirectory {
       }
     }
     return result;
+  }
+
+  async getDepartmentNameMap() {
+    this.signal?.throwIfAborted();
+    const map = new Map();
+    let departments = [];
+    try {
+      departments = await this.listDescendantDepartments('0');
+    } catch (error) {
+      const fallback = await readDepartmentNameFallback(this.departmentNamesFile);
+      if (fallback.size) return fallback;
+      throw error;
+    }
+    for (const department of departments) {
+      const id = departmentId(department);
+      const name = departmentLabel(department);
+      if (name) map.set(id, name);
+    }
+    if (departments.some(department => !map.has(departmentId(department)))) {
+      const fallback = await readDepartmentNameFallback(this.departmentNamesFile);
+      for (const [id, name] of fallback) if (!map.has(id)) map.set(id, name);
+    }
+    return map;
   }
 }
 
@@ -462,10 +548,15 @@ export async function sendFeishuReminderCards(client, {
   const content = JSON.stringify(card);
   let sentCount = 0;
   const failures = [];
+  let globalFailure = null;
   await mapPool(recipients, concurrency, async (recipient, index) => {
     signal?.throwIfAborted();
     const openId = recipient?.openId;
     if (typeof openId !== 'string' || !openId.trim()) return;
+    if (globalFailure) {
+      failures.push({ openId, name: recipient?.name || openId, code: globalFailure.code, message: globalFailure.message });
+      return;
+    }
     const uuid = batchId ? `${batchId}-${index}`.slice(0, 50) : undefined;
     try {
       await client.request('/im/v1/messages', {
@@ -482,11 +573,13 @@ export async function sendFeishuReminderCards(client, {
       sentCount += 1;
     } catch (error) {
       if (signal?.aborted) throw signal.reason || error;
+      const failure = reminderFailure(error);
+      if (failure.global) globalFailure = failure;
       failures.push({
         openId,
         name: recipient?.name || openId,
-        code: error?.code ?? 'SEND_FAILED',
-        message: '未能送达飞书机器人消息，请检查应用是否启用机器人能力、im:message:send_as_bot 权限及成员可见范围。',
+        code: failure.code,
+        message: failure.message,
       });
     }
   });

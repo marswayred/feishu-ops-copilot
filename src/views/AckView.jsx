@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CheckCheck,
@@ -36,9 +36,11 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
+  const autoLoginAttempted = useRef(false);
 
   const demo = bootstrap?.mode === 'demo';
   const currentOpenId = bootstrap?.user?.openId || '';
+  const inFeishuClient = isFeishuClient();
 
   async function loadAckPage() {
     setLoading(true);
@@ -75,6 +77,14 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
       setAuthBusy(false);
     }
   }
+
+  // 飞书客户端 / 催办卡片内打开确认页时自动免登。
+  useEffect(() => {
+    if (!bootstrap || demo || bootstrap.authenticated || !payload || payload.authenticated) return;
+    if (!inFeishuClient || autoLoginAttempted.current || authBusy) return;
+    autoLoginAttempted.current = true;
+    handleLogin();
+  }, [bootstrap, demo, payload, inFeishuClient, authBusy]);
 
   async function handleConfirm(event) {
     event.preventDefault();
@@ -164,12 +174,12 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
               <button type="button" className="button primary ack-submit-btn" disabled={authBusy} onClick={handleLogin}>
                 <Icon icon={authBusy ? LoaderCircle : UserCheck} className={authBusy ? 'spin' : ''} />
                 {authBusy
-                  ? '正在验证飞书身份…'
-                  : isFeishuClient()
+                  ? (inFeishuClient ? '正在自动验证飞书身份…' : '正在验证飞书身份…')
+                  : inFeishuClient
                     ? '飞书客户端一键免登并阅读'
                     : '通过飞书账号登录（扫码或桌面端快捷授权）'}
               </button>
-              {!isFeishuClient() && payload.feishuAppLink && (
+              {!inFeishuClient && payload.feishuAppLink && (
                 <a className="button secondary ack-applink" href={payload.feishuAppLink}>
                   <Icon icon={ExternalLink} size={16} />
                   在飞书客户端中打开此确认页
@@ -202,29 +212,15 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
                   <h2>必读说明与确认要求</h2>
                   <div className="ack-summary-body">{task.summary}</div>
 
-                  {(task.docUrl || task.fileName || task.fileSha256) && (
+                  {task.docUrl && (
                     <div className="ack-attachment-box">
-                      {task.docUrl && (
-                        <div className="ack-attachment-row">
-                          <span>在线查阅文档</span>
-                          <a href={task.docUrl} target="_blank" rel="noopener noreferrer">
-                            打开飞书云文档 / 原文链接
-                            <Icon icon={ExternalLink} size={14} />
-                          </a>
-                        </div>
-                      )}
-                      {task.fileName && (
-                        <div className="ack-attachment-row">
-                          <span>随信邮件附件</span>
-                          <code>{task.fileName}</code>
-                        </div>
-                      )}
-                      {task.fileSha256 && (
-                        <div className="ack-attachment-row">
-                          <span>SHA-256 校验摘要</span>
-                          <code className="sha-code">{task.fileSha256}</code>
-                        </div>
-                      )}
+                      <div className="ack-attachment-row">
+                        <span>在线查阅文档</span>
+                        <a href={task.docUrl} target="_blank" rel="noopener noreferrer">
+                          打开飞书云文档 / 原文链接
+                          <Icon icon={ExternalLink} size={14} />
+                        </a>
+                      </div>
                     </div>
                   )}
                 </section>
@@ -288,7 +284,7 @@ export function AckView({ slug, bootstrap, onBootstrapRefresh, onNavigate }) {
                       disabled={!checked || submitting}
                     >
                       <Icon icon={submitting ? LoaderCircle : FileCheck2} className={submitting ? 'spin' : ''} />
-                      {submitting ? '正在提交实名回执…' : `以本人身份确认已读（${user.name}）`}
+                      {submitting ? '正在提交…' : '确认已读'}
                     </button>
                   </form>
                 )}

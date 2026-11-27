@@ -259,6 +259,27 @@ test('OAuth HTTP-200 business failure and hanging fetch yield safe failures', as
   assert.equal((await timeout.json()).error.code, 'AUTH_TIMEOUT');
 });
 
+test('directory people search returns active members and filters by name', async t => {
+  const users = [
+    { open_id: 'ou_lin', name: '林晓', employee_no: 'E1001', enterprise_email: 'lin@example.com' },
+    { open_id: 'ou_wang', name: '王磊', employee_no: 'E2002', enterprise_email: 'wang@example.com', status: { is_resigned: true } },
+  ];
+  const { request } = await server(t, {
+    config: { mode: 'demo' },
+    directory: provider({
+      listAllUsers: async () => users,
+      getDepartmentNameMap: async () => new Map(),
+    }),
+  });
+  const all = await request('/api/ops/directory/people', { method: 'POST', body: { query: '' } });
+  assert.equal(all.status, 200);
+  assert.deepEqual((await all.json()).people, [{
+    openId: 'ou_lin', name: '林晓', employeeNo: 'E1001', departmentNames: '',
+  }]);
+  const filtered = await request('/api/ops/directory/people', { method: 'POST', body: { query: '不存在' } });
+  assert.deepEqual((await filtered.json()).people, []);
+});
+
 test('login endpoint rate limit returns structured JSON', async t => {
   const { request } = await server(t, { config: feishuConfig(), directory: provider(), fetchImpl: authFetch() });
   for (let i = 0; i < 10; i += 1) assert.equal((await request('/api/auth/feishu', { method: 'POST', body: {} })).status, 400);

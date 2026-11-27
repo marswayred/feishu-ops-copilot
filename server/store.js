@@ -40,6 +40,52 @@ function mapTaskRow(row) {
   };
 }
 
+function mapProjectRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    projectKey: row.project_key,
+    name: row.name,
+    ownerOpenId: row.owner_open_id,
+    ownerName: row.owner_name,
+    ownerEmployeeNo: row.owner_employee_no || '',
+    createdByOpenId: row.created_by_open_id || '',
+    createdByName: row.created_by_name || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    memberCount: row.member_count === undefined ? undefined : Number(row.member_count),
+  };
+}
+
+function mapProjectMemberRow(row) {
+  return {
+    openId: row.open_id,
+    name: row.name,
+    employeeNo: row.employee_no || '',
+    departmentNames: row.department_names || '',
+    source: row.source,
+    addedAt: row.added_at,
+  };
+}
+
+function mapApiTokenRow(row) {
+  if (!row) return null;
+  let scopes = [];
+  try { scopes = JSON.parse(row.scopes_json); } catch { scopes = []; }
+  return {
+    id: row.id,
+    name: row.name,
+    prefix: row.prefix,
+    scopes: Array.isArray(scopes) ? scopes : [],
+    expiresAt: row.expires_at || '',
+    createdByOpenId: row.created_by_open_id || '',
+    createdByName: row.created_by_name || '',
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at || '',
+    revokedAt: row.revoked_at || '',
+  };
+}
+
 export function createStore({ dbPath = ':memory:' } = {}) {
   if (typeof dbPath !== 'string' || !dbPath.trim()) {
     throw new TypeError('dbPath 必须为非空字符串或 :memory:');
@@ -125,6 +171,46 @@ export function createStore({ dbPath = ':memory:' } = {}) {
       failed_count INTEGER NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_key TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      owner_open_id TEXT NOT NULL,
+      owner_name TEXT NOT NULL,
+      owner_employee_no TEXT NOT NULL DEFAULT '',
+      created_by_open_id TEXT NOT NULL DEFAULT '',
+      created_by_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS project_members (
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      open_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      employee_no TEXT NOT NULL DEFAULT '',
+      department_names TEXT NOT NULL DEFAULT '',
+      source TEXT NOT NULL DEFAULT 'project' CHECK (source IN ('project', 'department', 'numbers')),
+      added_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, open_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_project_members_open_id ON project_members(open_id);
+
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      prefix TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      scopes_json TEXT NOT NULL,
+      expires_at TEXT NOT NULL DEFAULT '',
+      created_by_open_id TEXT NOT NULL DEFAULT '',
+      created_by_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      last_used_at TEXT NOT NULL DEFAULT '',
+      revoked_at TEXT NOT NULL DEFAULT ''
+    );
   `);
 
   const stmts = {
@@ -188,6 +274,7 @@ export function createStore({ dbPath = ':memory:' } = {}) {
       ORDER BY ta.confirmed_at DESC
     `),
     updateTaskStatus: db.prepare('UPDATE tasks SET status = ?, closed_at = ?, updated_at = ? WHERE id = ?'),
+    deleteTask: db.prepare('DELETE FROM tasks WHERE id = ?'),
     updateTaskVersion: db.prepare('UPDATE tasks SET version = ?, summary = ?, file_name = ?, file_sha256 = ?, doc_url = ?, updated_at = ? WHERE id = ?'),
     updateRemindedAt: db.prepare('UPDATE tasks SET last_reminded_at = ?, updated_at = ? WHERE id = ?'),
     insertReminderLog: db.prepare(`
@@ -195,6 +282,44 @@ export function createStore({ dbPath = ':memory:' } = {}) {
       VALUES (?, ?, ?, ?, ?, ?)
     `),
     listReminderLogs: db.prepare('SELECT * FROM reminder_logs WHERE task_id = ? ORDER BY id DESC LIMIT 10'),
+
+    countProjects: db.prepare('SELECT COUNT(*) AS count FROM projects'),
+    insertProject: db.prepare(`
+      INSERT INTO projects (
+        project_key, name, owner_open_id, owner_name, owner_employee_no,
+        created_by_open_id, created_by_name, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `),
+    updateProject: db.prepare(`
+      UPDATE projects SET name = ?, owner_open_id = ?, owner_name = ?, owner_employee_no = ?, updated_at = ?
+      WHERE id = ?
+    `),
+    deleteProject: db.prepare('DELETE FROM projects WHERE id = ?'),
+    getProject: db.prepare('SELECT * FROM projects WHERE id = ?'),
+    getProjectByKey: db.prepare('SELECT * FROM projects WHERE project_key = ?'),
+    listProjects: db.prepare(`
+      SELECT p.*, (SELECT COUNT(*) FROM project_members m WHERE m.project_id = p.id) AS member_count
+      FROM projects p
+      ORDER BY p.updated_at DESC, p.id DESC
+    `),
+    insertProjectMember: db.prepare(`
+      INSERT OR REPLACE INTO project_members (
+        project_id, open_id, name, employee_no, department_names, source, added_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `),
+    deleteProjectMember: db.prepare('DELETE FROM project_members WHERE project_id = ? AND open_id = ?'),
+    listProjectMembers: db.prepare('SELECT * FROM project_members WHERE project_id = ? ORDER BY employee_no ASC, name ASC'),
+    clearProjectMembers: db.prepare('DELETE FROM project_members WHERE project_id = ?'),
+
+    insertApiToken: db.prepare(`
+      INSERT INTO api_tokens (name, prefix, token_hash, scopes_json, expires_at, created_by_open_id, created_by_name, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `),
+    listApiTokens: db.prepare('SELECT * FROM api_tokens ORDER BY id DESC'),
+    getApiTokenByHash: db.prepare('SELECT * FROM api_tokens WHERE token_hash = ?'),
+    revokeApiToken: db.prepare('UPDATE api_tokens SET revoked_at = ? WHERE id = ?'),
+    deleteApiToken: db.prepare('DELETE FROM api_tokens WHERE id = ?'),
+    touchApiToken: db.prepare('UPDATE api_tokens SET last_used_at = ? WHERE id = ?'),
   };
 
   function withTransaction(work) {
@@ -447,6 +572,10 @@ export function createStore({ dbPath = ':memory:' } = {}) {
       stmts.updateTaskStatus.run(status, status === 'closed' ? now : '', now, taskId);
     },
 
+    deleteTask(taskId) {
+      return withTransaction(() => Number(stmts.deleteTask.run(taskId).changes) > 0);
+    },
+
     bumpTaskVersion(taskId, { version, summary, fileName, fileSha256, docUrl }) {
       const now = new Date().toISOString();
       stmts.updateTaskVersion.run(version, summary, fileName, fileSha256, docUrl, now, taskId);
@@ -470,6 +599,118 @@ export function createStore({ dbPath = ':memory:' } = {}) {
         failedCount: row.failed_count,
         createdAt: row.created_at,
       }));
+    },
+
+    // ─── 项目清单 ────────────────────────────────────────────────────────────
+    listProjects() {
+      return stmts.listProjects.all().map(row => mapProjectRow(row));
+    },
+
+    getProject(id) {
+      return mapProjectRow(stmts.getProject.get(id));
+    },
+
+    getProjectByKey(projectKey) {
+      return mapProjectRow(stmts.getProjectByKey.get(projectKey));
+    },
+
+    listProjectMembers(projectId) {
+      return stmts.listProjectMembers.all(projectId).map(mapProjectMemberRow);
+    },
+
+    createProject({ projectKey, name, owner, members = [], createdBy, createdAt = new Date().toISOString() }) {
+      return withTransaction(() => {
+        const info = stmts.insertProject.run(
+          projectKey,
+          name,
+          owner.openId,
+          owner.name || owner.openId,
+          owner.employeeNo || '',
+          createdBy?.openId || '',
+          createdBy?.name || createdBy?.openId || '',
+          createdAt,
+          createdAt,
+        );
+        const projectId = Number(info.lastInsertRowid);
+        for (const member of members) {
+          stmts.insertProjectMember.run(
+            projectId,
+            member.openId,
+            member.name || member.openId,
+            member.employeeNo || '',
+            member.departmentNames || '',
+            member.source || 'project',
+            createdAt,
+          );
+        }
+        return projectId;
+      });
+    },
+
+    updateProject({ projectId, name, owner, members = [], updatedAt = new Date().toISOString() }) {
+      return withTransaction(() => {
+        const changed = Number(stmts.updateProject.run(
+          name,
+          owner.openId,
+          owner.name || owner.openId,
+          owner.employeeNo || '',
+          updatedAt,
+          projectId,
+        ).changes);
+        if (!changed) return false;
+        stmts.clearProjectMembers.run(projectId);
+        for (const member of members) {
+          stmts.insertProjectMember.run(
+            projectId,
+            member.openId,
+            member.name || member.openId,
+            member.employeeNo || '',
+            member.departmentNames || '',
+            member.source || 'project',
+            updatedAt,
+          );
+        }
+        return true;
+      });
+    },
+
+    deleteProject(projectId) {
+      return withTransaction(() => Number(stmts.deleteProject.run(projectId).changes) > 0);
+    },
+
+    // ─── API 令牌 ────────────────────────────────────────────────────────────
+    listApiTokens() {
+      return stmts.listApiTokens.all().map(mapApiTokenRow);
+    },
+
+    getApiTokenByHash(tokenHash) {
+      return mapApiTokenRow(stmts.getApiTokenByHash.get(tokenHash));
+    },
+
+    createApiToken({ name, prefix, tokenHash, scopes, expiresAt = '', createdBy, createdAt = new Date().toISOString() }) {
+      const info = stmts.insertApiToken.run(
+        name,
+        prefix,
+        tokenHash,
+        JSON.stringify(scopes),
+        expiresAt,
+        createdBy?.openId || '',
+        createdBy?.name || createdBy?.openId || '',
+        createdAt,
+      );
+      return Number(info.lastInsertRowid);
+    },
+
+    revokeApiToken(tokenId, revokedAt = new Date().toISOString()) {
+      return Number(stmts.revokeApiToken.run(revokedAt, tokenId).changes) > 0;
+    },
+
+    deleteApiToken(tokenId) {
+      return Number(stmts.deleteApiToken.run(tokenId).changes) > 0;
+    },
+
+    touchApiToken(tokenId, usedAt = new Date().toISOString()) {
+      stmts.touchApiToken.run(usedAt, tokenId);
     },
 
     seedDemoTaskIfEmpty() {

@@ -16,11 +16,28 @@ import {
   resolveEmployeeNumbers,
   resolveSelection,
   resolveTaskAudience,
+  resolveProjectMembers,
   normalizeDirectoryMember,
 } from './directory.js';
 import { createDirectoryCache } from './directory-cache.js';
 import { createStore } from './store.js';
 import { reconcileTask, buildReconcileCsv } from './reconcile.js';
+import {
+  API_SCOPES,
+  generateApiToken,
+  hashApiToken,
+  normalizeScopes,
+  tokenDisplayPrefix,
+  tokenHasScope,
+  tokenIsUsable,
+} from './api-tokens.js';
+import {
+  PROJECT_MEMBERS_MAX,
+  PROJECT_NAME_MAX,
+  formatProject,
+  formatProjectSummary,
+  makeProjectKey,
+} from './projects.js';
 
 const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
 const DEFAULT_CACHE_PATH = fileURLToPath(new URL('../data/directory-cache.json', import.meta.url));
@@ -215,7 +232,10 @@ export function createApp({
         ttlMs: config.directoryCacheTtlMs,
         appId: config.appId,
       });
-      provider = new FeishuDirectory(apiClient, { cache: directoryCache });
+      const departmentNamesFile = config.directoryCachePath
+        ? path.join(path.dirname(path.resolve(config.directoryCachePath)), 'department-names.json')
+        : null;
+      provider = new FeishuDirectory(apiClient, { cache: directoryCache, departmentNamesFile });
       setImmediate(() => {
         provider.listAllUsers().then(users => {
           console.log(`directory_cache_warmed count=${users.length} ttl_hours=${Math.round(config.directoryCacheTtlMs / 3_600_000)}`);
@@ -336,6 +356,15 @@ export function createApp({
     next();
   }
 
+  function requireAdmin(req, _res, next) {
+    const user = currentUser(req);
+    if (!user) return next(fail(401, 'AUTH_REQUIRED', '请先使用飞书账号完成登录。'));
+    if (user.role !== 'admin') {
+      return next(fail(403, 'ADMIN_REQUIRED', '仅管理员可执行该操作。'));
+    }
+    next();
+  }
+
   async function query(req, res, work) {
     if (runningQueries >= config.maxConcurrentQueries) throw fail(429, 'BUSY', '正在处理的查询较多，请稍后重试。');
     runningQueries += 1;
@@ -378,7 +407,11 @@ export function createApp({
       try {
         const response = await fetchImpl(url, { ...options, redirect: 'error', signal: controller.signal });
         const body = await response.json();
-        if (!response.ok || body?.code !== 0) throw fail(401, 'AUTH_FAILED', '飞书认证失败或授权已过期，请重新登录。');
+        if (!response.ok || body?.code !== 0) {
+          const reason = typeof body?.msg === 'string' ? body.msg.slice(0, 200) : '';
+          console.error('feishu_auth_failed', body?.code ?? response.status, reason);
+          throw fail(401, 'AUTH_FAILED', '飞书认证失败或授权已过期，请重新登录。');
+        }
         return body;
       } catch (error) {
         if (error instanceof HttpError) throw error;
@@ -582,6 +615,33 @@ export function createApp({
     res.json({ refreshed: true, userCount: count });
   });
 
+  app.post('/api/ops/directory/people', requireOperator, async (req, res) => {
+    const body = objectBody(req);
+    const queryText = typeof body.query === 'string' ? body.query.trim().slice(0, 80).toLocaleLowerCase() : '';
+    const people = await query(req, res, async scoped => {
+      const deptMap = typeof scoped.getDepartmentNameMap === 'function' ? await scoped.getDepartmentNameMap() : new Map();
+      const users = await scoped.listAllUsers();
+      if (!Array.isArray(users)) throw new DirectoryError('通讯录 provider 未返回用户数组，查询未完成。');
+      const active = [];
+      for (const user of users) {
+        const member = normalizeDirectoryMember(user, deptMap);
+        if (member.inactive) continue;
+        active.push({
+          openId: member.openId,
+          name: member.name,
+          employeeNo: member.employeeNo,
+          departmentNames: member.departmentNames,
+        });
+      }
+      active.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN') || a.employeeNo.localeCompare(b.employeeNo, 'zh-CN'));
+      const matched = queryText
+        ? active.filter(person => `${person.name} ${person.employeeNo} ${person.departmentNames}`.toLocaleLowerCase().includes(queryText))
+        : active;
+      return matched.slice(0, 40);
+    });
+    res.json({ people });
+  });
+
   // ─── 运营权限同步管理（RBAC） ──────────────────────────────────────────────
   app.get('/api/ops/admins', requireOperator, (_req, res) => {
     res.json({
@@ -625,6 +685,224 @@ export function createApp({
     store.deleteGrant(targetOpenId);
     res.json({ rbacStrict: isRbacStrict(), grants: store.listGrants() });
   });
+
+  // ─── 项目清单（管理员） ────────────────────────────────────────────────────
+  function parseProjectPayload(req) {
+    const body = objectBody(req);
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > PROJECT_NAME_MAX) {
+      throw fail(400, 'INVALID_INPUT', `项目名称需为 1–${PROJECT_NAME_MAX} 字。`);
+    }
+    const ownerOpenId = typeof body.ownerOpenId === 'string' ? body.ownerOpenId.trim() : '';
+    if (!ownerOpenId || (!OPEN_ID_RE.test(ownerOpenId) && config.mode !== 'demo')) {
+      throw fail(400, 'INVALID_INPUT', '请选择项目负责人。');
+    }
+    const userIds = Array.isArray(body.userIds) ? strings(body.userIds, PROJECT_MEMBERS_MAX, OPEN_ID_RE, '成员 ID') : [];
+    const departmentIds = Array.isArray(body.departmentIds) ? strings(body.departmentIds, LIMITS.departments, DEPT_ID_RE, '部门 ID') : [];
+    const numbers = Array.isArray(body.numbers)
+      ? strings(body.numbers, PROJECT_MEMBERS_MAX, /^[^\s\x00-\x1f\x7f]{1,128}$/u, '工号')
+      : [];
+    const departmentLabels = Array.isArray(body.departmentLabels)
+      ? body.departmentLabels
+        .filter(item => item && typeof item.id === 'string' && DEPT_ID_RE.test(item.id) && typeof item.name === 'string')
+        .slice(0, LIMITS.departments)
+        .map(item => ({ id: item.id, name: item.name.trim().slice(0, 120) }))
+      : [];
+    return {
+      name,
+      ownerOpenId,
+      ownerLabel: { name: typeof body.ownerName === 'string' ? body.ownerName.trim().slice(0, 120) : '', employeeNo: typeof body.ownerEmployeeNo === 'string' ? body.ownerEmployeeNo.trim().slice(0, 64) : '' },
+      userIds,
+      departmentIds,
+      numbers,
+      departmentLabels,
+      includeChildren: body.includeChildren !== false,
+    };
+  }
+
+  async function resolveProjectInput(req, res, payload) {
+    return query(req, res, async scoped => {
+      const deptMap = typeof scoped.getDepartmentNameMap === 'function' ? await scoped.getDepartmentNameMap() : new Map();
+      const owner = await scoped.getUser(payload.ownerOpenId);
+      if (!owner) throw fail(422, 'OWNER_NOT_FOUND', '未能在通讯录中找到所选项目负责人。');
+      const ownerMember = normalizeDirectoryMember(owner, deptMap);
+      if (ownerMember.inactive) throw fail(422, 'OWNER_INACTIVE', '所选项目负责人已离职或账号被冻结，请重新选择。');
+      const resolved = await resolveProjectMembers(scoped, { ...payload, ownerOpenId: payload.ownerOpenId });
+      if (resolved.members.length > PROJECT_MEMBERS_MAX) {
+        throw fail(422, 'TOO_MANY_MEMBERS', `项目成员最多 ${PROJECT_MEMBERS_MAX} 人，请缩小选择范围。`);
+      }
+      return { owner: ownerMember, members: resolved.members, issues: resolved.issues };
+    });
+  }
+
+  app.get('/api/ops/projects', requireOperator, (_req, res) => {
+    res.json({ projects: store.listProjects().map(formatProjectSummary) });
+  });
+
+  app.get('/api/ops/projects/:id', requireOperator, (req, res) => {
+    const project = store.getProjectByKey(req.params.id);
+    if (!project) throw fail(404, 'PROJECT_NOT_FOUND', '未找到该项目。');
+    res.json({ project: formatProject(project, store.listProjectMembers(project.id)) });
+  });
+
+  app.post('/api/ops/projects', requireAdmin, async (req, res) => {
+    const payload = parseProjectPayload(req);
+    const resolved = await resolveProjectInput(req, res, payload);
+    const actor = currentUser(req);
+    const projectId = store.createProject({
+      projectKey: makeProjectKey(),
+      name: payload.name,
+      owner: resolved.owner,
+      members: resolved.members,
+      createdBy: actor,
+    });
+    const project = store.getProject(projectId);
+    res.status(201).json({
+      project: formatProject(project, store.listProjectMembers(projectId)),
+      issues: resolved.issues,
+    });
+  });
+
+  app.put('/api/ops/projects/:id', requireAdmin, async (req, res) => {
+    const project = store.getProjectByKey(req.params.id);
+    if (!project) throw fail(404, 'PROJECT_NOT_FOUND', '未找到该项目。');
+    const payload = parseProjectPayload(req);
+    const resolved = await resolveProjectInput(req, res, payload);
+    store.updateProject({
+      projectId: project.id,
+      name: payload.name,
+      owner: resolved.owner,
+      members: resolved.members,
+    });
+    const updated = store.getProject(project.id);
+    res.json({
+      project: formatProject(updated, store.listProjectMembers(project.id)),
+      issues: resolved.issues,
+    });
+  });
+
+  app.delete('/api/ops/projects/:id', requireAdmin, (req, res) => {
+    const project = store.getProjectByKey(req.params.id);
+    if (!project) throw fail(404, 'PROJECT_NOT_FOUND', '未找到该项目。');
+    store.deleteProject(project.id);
+    res.json({ deleted: true, id: project.projectKey });
+  });
+
+  app.post('/api/ops/directory/departments', requireOperator, async (req, res) => {
+    const departments = await query(req, res, async scoped => {
+      const deptMap = typeof scoped.getDepartmentNameMap === 'function' ? await scoped.getDepartmentNameMap() : new Map();
+      if (!deptMap.size) return [];
+      return [...deptMap.entries()]
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    });
+    res.json({ departments });
+  });
+
+  // ─── API 令牌（管理员） ────────────────────────────────────────────────────
+  function formatTokenSummary(token) {
+    return {
+      id: token.id,
+      name: token.name,
+      prefix: token.prefix,
+      scopes: token.scopes,
+      expiresAt: token.expiresAt,
+      createdAt: token.createdAt,
+      createdByName: token.createdByName,
+      lastUsedAt: token.lastUsedAt,
+      revokedAt: token.revokedAt,
+      expired: Boolean(token.expiresAt) && Date.parse(token.expiresAt) <= Date.now(),
+      usable: tokenIsUsable(token),
+    };
+  }
+
+  app.get('/api/ops/tokens', requireAdmin, (_req, res) => {
+    res.json({ scopes: API_SCOPES, tokens: store.listApiTokens().map(formatTokenSummary) });
+  });
+
+  app.post('/api/ops/tokens', requireAdmin, (req, res) => {
+    const body = objectBody(req);
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > 80) throw fail(400, 'INVALID_INPUT', '令牌名称需为 1–80 字。');
+    const scopes = normalizeScopes(body.scopes);
+    if (!scopes.length) throw fail(400, 'INVALID_INPUT', '请至少选择一个权限范围。');
+    let expiresAt = '';
+    if (typeof body.expiresAt === 'string' && body.expiresAt.trim()) {
+      const raw = body.expiresAt.trim();
+      if (!/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2})?$/.test(raw)) throw fail(400, 'INVALID_INPUT', '到期时间格式不正确（示例：2027-01-31）。');
+      const parsed = Date.parse(raw.replace(' ', 'T'));
+      if (!Number.isFinite(parsed) || parsed <= Date.now()) throw fail(400, 'INVALID_INPUT', '到期时间必须晚于当前时间。');
+      expiresAt = new Date(parsed).toISOString();
+    }
+    const token = generateApiToken();
+    const actor = currentUser(req);
+    const id = store.createApiToken({
+      name,
+      prefix: tokenDisplayPrefix(token),
+      tokenHash: hashApiToken(token),
+      scopes,
+      expiresAt,
+      createdBy: actor,
+    });
+    const record = store.listApiTokens().find(item => item.id === id);
+    res.status(201).json({ token, summary: formatTokenSummary(record) });
+  });
+
+  app.post('/api/ops/tokens/:id/revoke', requireAdmin, (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id < 1) throw fail(404, 'TOKEN_NOT_FOUND', '未找到该令牌。');
+    if (!store.revokeApiToken(id)) throw fail(404, 'TOKEN_NOT_FOUND', '未找到该令牌。');
+    res.json({ tokens: store.listApiTokens().map(formatTokenSummary) });
+  });
+
+  app.delete('/api/ops/tokens/:id', requireAdmin, (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id < 1) throw fail(404, 'TOKEN_NOT_FOUND', '未找到该令牌。');
+    if (!store.deleteApiToken(id)) throw fail(404, 'TOKEN_NOT_FOUND', '未找到该令牌。');
+    res.json({ tokens: store.listApiTokens().map(formatTokenSummary) });
+  });
+
+  // ─── 对外只读 API（Bearer 令牌） ───────────────────────────────────────────
+  // 独立于会话鉴权，供其他系统查询清单；不经过浏览器 CSRF 校验。
+  app.get('/api/v1/projects', (req, res) => {
+    const token = requireApiToken(req, 'projects:read');
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 200);
+    const cursor = typeof req.query.cursor === 'string' ? Number(req.query.cursor) : 0;
+    const updatedSince = typeof req.query.updatedSince === 'string' ? Date.parse(req.query.updatedSince) : NaN;
+    let projects = store.listProjects();
+    if (Number.isFinite(updatedSince)) {
+      projects = projects.filter(project => Date.parse(project.updatedAt) > updatedSince);
+    }
+    const start = Number.isSafeInteger(cursor) && cursor > 0 ? cursor : 0;
+    const page = projects.slice(start, start + limit);
+    const nextCursor = start + page.length < projects.length ? start + page.length : null;
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      data: page.map(formatProjectSummary),
+      page: { limit, nextCursor, total: projects.length },
+      serverTime: new Date().toISOString(),
+      token: { name: token.name, scopes: token.scopes },
+    });
+  });
+
+  app.get('/api/v1/projects/:id', (req, res) => {
+    requireApiToken(req, 'projects:read');
+    const project = store.getProjectByKey(req.params.id);
+    if (!project) throw fail(404, 'PROJECT_NOT_FOUND', '未找到该项目。');
+    res.set('Cache-Control', 'no-store');
+    res.json({ data: formatProject(project, store.listProjectMembers(project.id)) });
+  });
+
+  function requireApiToken(req, scope) {
+    const header = req.get('authorization') || '';
+    const match = header.match(/^Bearer\s+(\S+)$/i);
+    if (!match) throw fail(401, 'TOKEN_REQUIRED', '请在 Authorization 头中提供 Bearer 令牌。');
+    const record = store.getApiTokenByHash(hashApiToken(match[1]));
+    if (!record || !tokenIsUsable(record)) throw fail(401, 'TOKEN_INVALID', '令牌无效、已停用或已过期。');
+    if (!tokenHasScope(record, scope)) throw fail(403, 'SCOPE_REQUIRED', `该令牌缺少 ${scope} 权限范围。`);
+    store.touchApiToken(record.id);
+    return record;
+  }
 
   // ─── 模块二：重要文件分发任务与全员通讯录对账（运营管理员） ─────────────────
   function formatTaskSummary(task) {
@@ -787,6 +1065,15 @@ export function createApp({
       task: formatTaskSummary(refreshed.task),
       report: refreshed.report,
     });
+  });
+
+  app.delete('/api/ops/tasks/:slug', requireOperator, (req, res) => {
+    const slug = req.params.slug;
+    if (!SLUG_RE.test(slug)) throw fail(404, 'TASK_NOT_FOUND', '未找到对应的文件分发任务。');
+    const task = store.getTaskBySlug(slug);
+    if (!task) throw fail(404, 'TASK_NOT_FOUND', '未找到对应的文件分发任务。');
+    store.deleteTask(task.id);
+    res.json({ deleted: true, slug });
   });
 
   app.post('/api/ops/tasks/:slug/status', requireOperator, async (req, res) => {
